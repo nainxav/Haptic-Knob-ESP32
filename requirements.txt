@@ -1,0 +1,6 @@
+# Haptic Knob - Needle Insertion Simulation
+# Python dependencies for visualization
+
+pygame>=2.5.0
+PyOpenGL>=3.1.7
+pyserial>=3.5
