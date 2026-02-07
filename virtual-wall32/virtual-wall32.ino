@@ -1,29 +1,3 @@
-// #include <Arduino.h>
-// #include "knob.h"
-
-// void setup()
-// {
-//   Serial.begin(115200);
-//   delay(200);
-
-//   knob_init();  // will home toward ~180° on startup
-
-//   // Then configure wall as usual:
-//   knob_set_wall_region_deg(180.0f, 60.0f);
-
-//   // For *your* wiring/orientation, these negative K values are what you found works:
-//   knob_set_wall_gains(
-//     -0.01f,    // Kp wall
-//     -0.0001f,  // Kd wall
-//     -0.0000f   // friction
-//   );
-// }
-
-// void loop()
-// {
-//   knob_update_wall();
-// }
-
 #include <Arduino.h>
 #include "knob.h"
 
