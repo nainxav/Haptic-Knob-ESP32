@@ -89,6 +89,80 @@
     margin-top: 10px; border-radius: 6px;
     background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.05);
   }
+
+  /* ---- Serial Log Panel ---- */
+  #logPanel {
+    position: fixed; bottom: 50px; right: 20px; z-index: 20;
+    width: 420px; pointer-events: auto;
+    background: rgba(8,8,16,.92);
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: height .25s ease, opacity .2s;
+  }
+  #logPanel.collapsed { height: 36px !important; }
+  #logPanel.collapsed #logBody { display: none; }
+
+  #logHeader {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 14px; cursor: pointer; user-select: none;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+  }
+  #logHeader:hover { background: rgba(255,255,255,.03); }
+  #logTitle {
+    font-size: 11px; font-weight: 600; letter-spacing: .5px;
+    color: #999; text-transform: uppercase;
+  }
+  #logTitle .dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    margin-right: 6px; vertical-align: middle;
+  }
+  #logTitle .dot.live  { background: #40e080; box-shadow: 0 0 6px #40e080; }
+  #logTitle .dot.idle  { background: #666; }
+  #logToggleIcon {
+    font-size: 14px; color: #666; transition: transform .2s;
+  }
+  #logPanel.collapsed #logToggleIcon { transform: rotate(180deg); }
+
+  #logBody { padding: 0; }
+
+  #logContent {
+    height: 220px; overflow-y: auto; padding: 6px 12px;
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 11px; line-height: 1.6; color: #b0b0c0;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,.1) transparent;
+  }
+  #logContent::-webkit-scrollbar { width: 5px; }
+  #logContent::-webkit-scrollbar-track { background: transparent; }
+  #logContent::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 3px; }
+
+  .log-line { white-space: nowrap; }
+  .log-ts   { color: #555; margin-right: 6px; }
+  .log-key  { color: #888; }
+  .log-depth  { color: #60c0ff; }
+  .log-force  { color: #ffaa40; }
+  .log-state  { color: #ff5050; }
+  .log-layer  { color: #f2c9a8; }
+  .log-info   { color: #40e080; }
+  .log-warn   { color: #e0c040; }
+
+  #logFooter {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 12px; border-top: 1px solid rgba(255,255,255,.05);
+  }
+  #logCount { font-size: 10px; color: #555; font-variant-numeric: tabular-nums; }
+  #logClearBtn {
+    font-size: 10px; color: #666; background: rgba(255,255,255,.06);
+    border: none; border-radius: 4px; padding: 2px 10px; cursor: pointer;
+    letter-spacing: .3px;
+  }
+  #logClearBtn:hover { color: #aaa; background: rgba(255,255,255,.1); }
+  #logAutoScroll {
+    font-size: 10px; color: #666; cursor: pointer; user-select: none;
+  }
+  #logAutoScroll.active { color: #40e080; }
 </style>
 </head>
 <body>
@@ -128,6 +202,22 @@
   </div>
   <div>
     <button id="connectBtn" onclick="connectSerial()">Connect ESP32</button>
+  </div>
+</div>
+
+<!-- Serial Log Panel -->
+<div id="logPanel">
+  <div id="logHeader" onclick="toggleLog()">
+    <span id="logTitle"><span class="dot idle" id="logDot"></span>Serial Monitor</span>
+    <span id="logToggleIcon">▼</span>
+  </div>
+  <div id="logBody">
+    <div id="logContent"></div>
+    <div id="logFooter">
+      <span id="logCount">0 lines</span>
+      <span id="logAutoScroll" class="active" onclick="toggleAutoScroll(event)">⇣ Auto-scroll</span>
+      <button id="logClearBtn" onclick="clearLog(event)">Clear</button>
+    </div>
   </div>
 </div>
 
@@ -477,6 +567,9 @@ async function connectSerial() {
     state.connected = true;
     document.getElementById('connectBtn').textContent = 'Connected';
     document.getElementById('connectBtn').classList.add('connected');
+    if (dummyInterval) clearInterval(dummyInterval);
+    addLogLine('Serial connected to ESP32', 'info');
+    logDot.className = 'dot live';
     readLoop();
   } catch (e) {
     console.warn('Serial connect failed:', e);
@@ -501,17 +594,26 @@ async function readLoop() {
 }
 
 function parseLine(line) {
-  if (!line.includes('Depth_mm:')) return;
-  const parts = line.split(/\s+/);
-  for (const p of parts) {
-    const [key, val] = p.split(':');
-    const v = parseFloat(val) || 0;
-    if (key === 'Depth_mm')  state.depthMm  = v;
-    if (key === 'Force_cmd') state.force     = v;
-    if (key === 'State')     state.stateId   = Math.round(v / 0.5);
-    if (key === 'Layer')     state.layerIdx  = Math.round(v);
-    if (key === 'FTip')      state.fTip      = v;
-    if (key === 'FFric')     state.fFric     = v;
+  if (!line) return;
+  // Feed every serial line to the log
+  if (line.includes('Depth_mm:')) {
+    addLogLine(line, 'data');
+    logDot.className = 'dot live';
+    const parts = line.split(/\s+/);
+    for (const p of parts) {
+      const [key, val] = p.split(':');
+      const v = parseFloat(val) || 0;
+      if (key === 'Depth_mm')  state.depthMm  = v;
+      if (key === 'Force_cmd') state.force     = v;
+      if (key === 'State')     state.stateId   = Math.round(v / 0.5);
+      if (key === 'Layer')     state.layerIdx  = Math.round(v);
+      if (key === 'FTip')      state.fTip      = v;
+      if (key === 'FFric')     state.fFric     = v;
+    }
+  } else if (line.startsWith('===') || line.includes('init') || line.includes('Homing') || line.includes('Calibrat')) {
+    addLogLine(line, 'info');
+  } else {
+    addLogLine(line, 'warn');
   }
 }
 
@@ -694,6 +796,117 @@ function updateHUD() {
   forceCtx.fillText('tip', w - 14, 21);
   forceCtx.fillText('fric', w - 14, 31);
 }
+
+// ==================== SERIAL LOG PANEL ====================
+const logEl = document.getElementById('logContent');
+const logPanel = document.getElementById('logPanel');
+const logCountEl = document.getElementById('logCount');
+const logDot = document.getElementById('logDot');
+let logLineCount = 0;
+let logAutoScroll = true;
+const MAX_LOG_LINES = 500;
+
+function toggleLog() {
+  logPanel.classList.toggle('collapsed');
+}
+window.toggleLog = toggleLog;
+
+function toggleAutoScroll(e) {
+  e.stopPropagation();
+  logAutoScroll = !logAutoScroll;
+  document.getElementById('logAutoScroll').classList.toggle('active', logAutoScroll);
+}
+window.toggleAutoScroll = toggleAutoScroll;
+
+function clearLog(e) {
+  e.stopPropagation();
+  logEl.innerHTML = '';
+  logLineCount = 0;
+  logCountEl.textContent = '0 lines';
+}
+window.clearLog = clearLog;
+
+function addLogLine(text, type = 'data') {
+  const now = new Date();
+  const ts = now.toTimeString().slice(0, 8) + '.' + String(now.getMilliseconds()).padStart(3, '0');
+
+  const line = document.createElement('div');
+  line.className = 'log-line';
+
+  if (type === 'data' && text.includes('Depth_mm:')) {
+    let html = `<span class="log-ts">${ts}</span>`;
+    const parts = text.split(/\s+/);
+    for (const p of parts) {
+      const [k, v] = p.split(':');
+      if (k === 'Depth_mm')       html += `<span class="log-key">Depth:</span><span class="log-depth">${v}</span> `;
+      else if (k === 'Force_cmd') html += `<span class="log-key">F:</span><span class="log-force">${v}</span> `;
+      else if (k === 'State')     html += `<span class="log-key">St:</span><span class="log-state">${v}</span> `;
+      else if (k === 'Layer')     html += `<span class="log-key">L:</span><span class="log-layer">${v}</span> `;
+      else if (k === 'FTip')      html += `<span class="log-key">Tip:</span><span class="log-force">${v}</span> `;
+      else if (k === 'FFric')     html += `<span class="log-key">Fric:</span><span class="log-depth">${v}</span> `;
+      else html += `<span class="log-key">${p}</span> `;
+    }
+    line.innerHTML = html;
+  } else if (type === 'info') {
+    line.innerHTML = `<span class="log-ts">${ts}</span><span class="log-info">${text}</span>`;
+  } else if (type === 'warn') {
+    line.innerHTML = `<span class="log-ts">${ts}</span><span class="log-warn">${text}</span>`;
+  } else {
+    line.innerHTML = `<span class="log-ts">${ts}</span>${text}`;
+  }
+
+  logEl.appendChild(line);
+  logLineCount++;
+
+  while (logEl.children.length > MAX_LOG_LINES) {
+    logEl.removeChild(logEl.firstChild);
+    logLineCount = logEl.children.length;
+  }
+
+  logCountEl.textContent = `${logLineCount} lines`;
+
+  if (logAutoScroll) {
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+}
+
+// ---- Dummy data generator (runs when not connected) ----
+let dummyTime = 0;
+let dummyInterval = null;
+let dummyStarted = false;
+
+function startDummyLog() {
+  if (dummyStarted) return;
+  dummyStarted = true;
+
+  addLogLine('=== Needle Insertion Simulation ===', 'info');
+  addLogLine('Model: Okamura (2004) + Mahvash-Dupont contact', 'info');
+  addLogLine('Layers: Skin / Fat / Muscle', 'info');
+  addLogLine('Homing to ~center...', 'info');
+  addLogLine('Homing done.', 'info');
+  addLogLine('knob_init: AS5600 + TB6612FNG ready (virtual wall mode)', 'info');
+  addLogLine('Surface calibrated at: 180.2', 'info');
+  addLogLine('Waiting for input...', 'info');
+
+  dummyInterval = setInterval(() => {
+    if (state.connected) {
+      clearInterval(dummyInterval);
+      return;
+    }
+    const d = state.depthMm;
+    const f = state.force;
+    const ft = state.fTip;
+    const ff = state.fFric;
+    const st = state.stateId * 0.5;
+    const li = state.layerIdx;
+    const line = `Depth_mm:${d.toFixed(2)} Force_cmd:${f.toFixed(4)} State:${st.toFixed(1)} Layer:${li} FTip:${ft.toFixed(4)} FFric:${ff.toFixed(4)}`;
+    addLogLine(line, 'data');
+
+    logDot.className = d > 0 ? 'dot live' : 'dot idle';
+  }, 100);
+}
+
+setTimeout(startDummyLog, 500);
 
 // ==================== ANIMATE ====================
 const clock = new THREE.Clock();
