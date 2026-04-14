@@ -1,8 +1,14 @@
-# Haptic Knob – Needle Insertion Simulation (ESP32)
+# Haptic Knob - Needle Insertion Simulation (ESP32)
 
 A haptic feedback system that simulates the feel of needle insertion through multi-layer tissue using an ESP32, motor-driven force feedback, and real-time 3D visualization.
 
-![Visualization](images/Visualization.png)
+## Screenshots
+
+Three.js browser visualization (tissue layers, needle, HUD, and force graph):
+
+| Screenshot 1 | Screenshot 2 |
+|:------------:|:------------:|
+| ![3D visualization (view 1)](images/Visualization1.png) | ![3D visualization (view 2)](images/Visualization2.png) |
 
 ## Overview
 
@@ -30,21 +36,21 @@ f_axial = f_stiffness + f_cutting + f_friction
 Mahvash & Dupont nonlinear spring + Maxwell viscoelastic branch:
 
 ```
-f_tip = a?·?² + a?·? + K(?)·?_k
+f_tip = a2 * delta^2 + a1 * delta + K(delta) * delta_k
 
-K(?) = K'·?          (deformation-dependent stiffness)
-? = D'/K'             (viscoelastic time constant)
+K(delta) = K' * delta_k   (deformation-dependent stiffness)
+tau = D'/K'               (viscoelastic time constant)
 ```
 
-The Maxwell branch provides viscoelastic relaxation — force decays when the user stops pushing.
+The Maxwell branch provides viscoelastic relaxation: force decays when the user stops pushing.
 
-### Fracture (Rupture ? Cutting)
+### Fracture (Rupture to Cutting)
 
 When tip force reaches the rupture threshold **Fr**, the tissue punctures with an instant force drop to the constant cutting force **Fc**:
 
 ```
-Puncture event:  f_tip jumps from Fr ? Fc   (pop-through sensation)
-Cutting:         f_tip = Fc = Rf · wc       (fracture toughness × crack width)
+Puncture event:  f_tip jumps from Fr to Fc   (pop-through sensation)
+Cutting:           f_tip = Fc = Rf * wc        (fracture toughness x crack width)
 ```
 
 ### Shaft Friction (Coulomb + Viscous)
@@ -52,16 +58,16 @@ Cutting:         f_tip = Fc = Rf · wc       (fracture toughness × crack width)
 Friction increases with insertion depth (more shaft-tissue contact area):
 
 ```
-f_friction = ?_shaft · depth + B_viscous · velocity + f_stiction
+f_friction = mu_shaft * depth + B_viscous * velocity + f_stiction
 ```
 
 ### Tissue Layer Parameters
 
-| Layer | Depth | a? | a? | K' | ? (s) | Fr (rupture) | Fc (cutting) |
+| Layer | Depth | a1 | a2 | K' | tau (s) | Fr (rupture) | Fc (cutting) |
 |-------|-------|------|------|------|-------|--------------|--------------|
-| **Skin** | 0–2 mm | 0.08 | 0.12 | 0.20 | 0.04 | 0.55 | 0.08 |
-| **Fat** | 2–10 mm | 0.012 | 0.002 | 0.03 | 0.10 | 0.22 | 0.06 |
-| **Muscle** | 10–35 mm | 0.018 | 0.004 | 0.06 | 0.06 | 0.35 | 0.12 |
+| **Skin** | 0-2 mm | 0.08 | 0.12 | 0.20 | 0.04 | 0.55 | 0.08 |
+| **Fat** | 2-10 mm | 0.012 | 0.002 | 0.03 | 0.10 | 0.22 | 0.06 |
+| **Muscle** | 10-35 mm | 0.018 | 0.004 | 0.06 | 0.06 | 0.35 | 0.12 |
 
 Each layer has a distinct "pop" feel: skin is stiff with a strong rupture, fat is soft and compliant, muscle is fibrous with moderate resistance.
 
@@ -69,12 +75,12 @@ Each layer has a distinct "pop" feel: skin is stiff with a strong rupture, fat i
 
 - ESP32 development board
 - DC Motor with H-Bridge driver (TB6612FNG or similar)
-  - PWMA ? IO18
-  - AIN1 ? IO19
-  - AIN2 ? IO23
+  - PWMA -> IO18
+  - AIN1 -> IO19
+  - AIN2 -> IO23
 - AS5600 Magnetic Rotary Encoder (I2C)
-  - SDA ? IO21
-  - SCL ? IO22
+  - SDA -> IO21
+  - SCL -> IO22
 - Rotary knob mechanism attached to motor shaft
 
 ## Software Requirements
@@ -85,7 +91,7 @@ Each layer has a distinct "pop" feel: skin is stiff with a strong rupture, fat i
 
 ### 3D Visualization (Browser)
 - Chrome or Edge (Web Serial API support)
-- No installation needed — open `visualization3d.html` in browser
+- No installation needed: open `visualization3d.html` in browser
 
 ### Legacy Python Visualization (optional)
 - Python 3.8+
@@ -126,7 +132,7 @@ python visualization.py
 |---------|--------|
 | Left Drag | Orbit camera |
 | Scroll | Zoom in/out |
-| ? / ? Arrows | Simulate needle movement (no hardware) |
+| UP / DOWN Arrows | Simulate needle movement (no hardware) |
 | R | Reset to surface |
 | Connect ESP32 | Pair serial device |
 
@@ -149,7 +155,7 @@ Depth_mm:12.34 Force_cmd:0.1823 State:1.0 Layer:1 FTip:0.0600 FFric:0.0370
 | Field | Description |
 |-------|-------------|
 | `Depth_mm` | Needle depth in mm (0 = surface) |
-| `Force_cmd` | Total motor output magnitude (0–1) |
+| `Force_cmd` | Total motor output magnitude (0-1) |
 | `State` | 0 = Air, 0.5 = Deform, 1.0 = Cutting |
 | `Layer` | -1 = Air, 0 = Skin, 1 = Fat, 2 = Muscle |
 | `FTip` | Tip force (stiffness or cutting) |
@@ -157,7 +163,7 @@ Depth_mm:12.34 Force_cmd:0.1823 State:1.0 Layer:1 FTip:0.0600 FFric:0.0370
 
 ## Calibration
 
-1. Power on the device — the knob auto-homes to ~180°
+1. Power on the device: the knob auto-homes to ~180 deg
 2. Hold the knob steady for 2 seconds
 3. The current position is set as the skin surface (0 mm)
 4. Rotate clockwise to insert, counter-clockwise to extract
@@ -175,8 +181,8 @@ virtual-wall32/
 ??? .gitignore
 ??? README.md
 ??? images/
-    ??? Visualization.png
-    ??? Simulation.mp4
+    ??? Visualization1.png   # README screenshots
+    ??? Visualization2.png
 ```
 
 ## Troubleshooting
@@ -195,9 +201,9 @@ virtual-wall32/
 
 ## References
 
-- Okamura, A. M., Simone, C., & O'Leary, M. D. (2004). *Force modeling for needle insertion into soft tissue*. IEEE Trans. Biomedical Engineering, 51(10), 1707–1716.
-- Mahvash, M. & Dupont, P. E. (2010). *Mechanics of dynamic needle insertion into a biological material*. IEEE Trans. Biomedical Engineering, 57(4), 934–943.
-- Delbos, B., Chalard, R., Lelevé, A., & Moreau, R. (2024). *A generalized tracking wall approach to the haptic simulation of tip forces during needle insertion*. IEEE Trans. Haptics, 18(1), 110–123.
+- Okamura, A. M., Simone, C., & O'Leary, M. D. (2004). *Force modeling for needle insertion into soft tissue*. IEEE Trans. Biomedical Engineering, 51(10), 1707-1716.
+- Mahvash, M. & Dupont, P. E. (2010). *Mechanics of dynamic needle insertion into a biological material*. IEEE Trans. Biomedical Engineering, 57(4), 934-943.
+- Delbos, B., Chalard, R., Lelevé, A., & Moreau, R. (2024). *A generalized tracking wall approach to the haptic simulation of tip forces during needle insertion*. IEEE Trans. Haptics, 18(1), 110-123.
 
 ## License
 
