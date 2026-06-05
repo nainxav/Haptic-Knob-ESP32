@@ -1,34 +1,37 @@
-# Haptic Knob - Needle Insertion Simulation (ESP32)
+# Haptic Knob Needle Insertion Simulation (ESP32)
 
-**Demo Video:**
-[Tonton Video Demonstrasi Sistem Melalui Instagram Reels](https://www.instagram.com/reel/DZNVUA0p1P7/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==)
+**Video Demo:**
+[Watch the System Demonstration Video via Instagram Reels!](https://www.instagram.com/reel/DZNVUA0p1P7/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==)
 
-## Cuplikan Antarmuka Sistem
+**Code documentation:**
+[Check the documentation folder here!](https://kizzuato.github.io/NiceKnob-Documentation/)
 
-Visualisasi tiga dimensi berbasis peramban web menampilkan lapisan jaringan, posisi jarum, tampilan Head-Up Display (HUD), dan grafik gaya secara waktu nyata.
+## System Interface Snippet
 
-| Sudut Pandang Pertama | Sudut Pandang Kedua |
+The web browser based three dimensional visualization displays the tissue layers, the needle position, the Head Up Display (HUD) projection, and the force graph in real time.
+
+| First Screenshot | Second Screenshot |
 |:------------:|:------------:|
-| ![Visualisasi 3D Sudut 1](images/Visualization1.png) | ![Visualisasi 3D Sudut 2](images/Visualization2.png) |
+| ![Visualization 1](images/Visualization1.png) | ![Visualization 2](images/Visualization2.png) |
 
-## Tinjauan Umum Proyek
+## Project Overview
 
-Proyek ini menghadirkan sebuah sistem simulasi umpan balik haptik berbasis fisika yang secara spesifik meniru sensasi penyisipan jarum menembus berbagai lapisan jaringan biologis. Pengembang merancang sistem ini dengan berlandaskan pada penelitian biomekanika yang telah dipublikasikan sebelumnya. Model gaya yang kami terapkan mampu memproduksi ulang enam fase penyisipan yang berbeda. Fase-fase ini mencakup penetrasi melewati tiga lapisan jaringan utama, di mana setiap lapisan memiliki karakteristik mekanis yang unik dan spesifik.
+This project presents a physics based haptic feedback simulation system that specifically mimics the sensation of needle insertion penetrating through various layers of biological tissue. The developers designed this system based on previously published biomechanics research. The force model we implement is capable of reproducing six distinct insertion phases. These phases encompass the penetration through three main tissue layers, where each layer possesses unique and specific mechanical characteristics.
 
-| Fase | Deskripsi Detail |
+| Phase | Detailed Description |
 |-------|-------------|
-| **Udara (Air)** | Sistem tidak memberikan resistansi gaya sama sekali ketika jarum berada di atas permukaan jaringan. |
-| **Deformasi (Praruktur)** | Pengguna akan merasakan resistansi viskoelastis nonlinier seiring dengan perubahan bentuk atau deformasi jaringan akibat tekanan ujung jarum. |
-| **Ruptur (Pecah)** | Sistem menghasilkan penurunan gaya yang terjadi secara instan persis pada saat ujung jarum berhasil menembus atau merobek lapisan jaringan. |
-| **Pemotongan (Pascacabik)** | Sistem mempertahankan gaya konstan pada ujung jarum saat jarum bergerak memotong dan menembus ke dalam jaringan. |
-| **Relaksasi** | Gaya haptik akan meluruh secara perlahan saat pengguna menghentikan pergerakan jarum di dalam jaringan. |
-| **Ekstraksi** | Sistem memberikan gaya gesekan yang berlawanan arah untuk menahan gerakan penarikan jarum ke luar. |
+| **Air** | The system does not provide any force resistance at all when the needle is located above the tissue surface. |
+| **Deformation (Prerupture)** | The user will experience nonlinear viscoelastic resistance as the tissue undergoes shape changes or deformation resulting from the needle tip pressure. |
+| **Rupture** | The system generates an instantaneous force drop exactly at the moment the needle tip successfully penetrates or tears the tissue layer. |
+| **Cutting (Postrupture)** | The system maintains a constant force at the needle tip as the needle moves to cut and penetrate deeper into the tissue. |
+| **Relaxation** | The haptic force will decay slowly when the user stops the needle movement inside the tissue. |
+| **Extraction** | The system provides a friction force in the opposite direction to resist the outward withdrawal movement of the needle. |
 
-## Arsitektur Komputasi Paralel (Sistem Multicore ESP32)
+## Parallel Computing Architecture (ESP32 Multicore System)
 
-Proyek ini sangat mengandalkan paradigma komputasi paralel untuk memastikan simulasi fisika berjalan secara deterministik dan presisi tanpa hambatan dari proses antarmuka komunikasi. Mikrokontroler ESP32 memiliki arsitektur prosesor inti ganda (Dual-Core). Pengembang memanfaatkan sistem operasi waktu nyata FreeRTOS untuk membagi beban kerja komputasi secara eksplisit ke dalam dua inti prosesor yang berbeda.
+This project relies heavily on the parallel computing paradigm to ensure the physics simulation runs deterministically and precisely without encountering bottlenecks from the communication interface processes. The ESP32 microcontroller features a Dual Core processor architecture. The developers utilize the FreeRTOS real time operating system to explicitly divide the computational workload into two distinct processor cores.
 
-Pendekatan komputasi paralel ini menyelesaikan masalah leher botol (bottleneck) yang sering terjadi pada mikrokontroler inti tunggal. Jika sistem menghitung fisika dan mengirim data serial secara berurutan, maka akan terjadi latensi yang merusak sensasi haptik. Dengan komputasi paralel, proses pembacaan sensor dan komputasi umpan balik gaya berjalan independen dari proses pengiriman log komunikasi menuju peramban web.
+This parallel computing approach resolves the bottleneck issues that frequently occur in single core microcontrollers. If the system calculates physics and sends serial data sequentially, latency will occur and ruin the haptic sensation. By employing parallel computing, the process of reading sensors and computing force feedback runs independently from the process of sending communication logs to the web browser.
 
 ```mermaid
 graph TD
@@ -37,174 +40,182 @@ graph TD
             A[Membaca Data Sensor Enkoder I2C] --> B[Menghitung Kedalaman Posisi Jarum]
             B --> C[Mengevaluasi Model Fisika Okamura]
             C --> D[Menghasilkan Sinyal PWM Motor]
+    subgraph "ESP32 Microcontroller"
+        subgraph "Core 1: Haptic Control Loop (High Priority)"
+            A[Read I2C Encoder Sensor Data] --> B[Calculate Needle Position Depth]
+            B --> C[Evaluate Okamura Physics Model]
+            C --> D[Generate Motor PWM Signal]
         end
         subgraph "Core 0: Komunikasi Serial (Prioritas Rendah)"
             E[Menerima Data Fisika via FreeRTOS Queue] --> F[Memformat Data Menjadi String Serial]
             F --> G[Mengirim Data ke Komputer]
+        subgraph "Core 0: Serial Communication (Low Priority)"
+            E[Receive Physics Data via FreeRTOS Queue] --> F[Format Data Into Serial String]
+            F --> G[Send Data to Computer]
         end
     end
     D -->|"Sinyal Kendali"| Motor["Motor DC Haptik"]
     G -->|"Visualisasi Log"| Browser["Peramban Web 3D"]
+    D -->|"Control Signal"| Motor["Haptic DC Motor"]
+    G -->|"Log Visualization"| Browser["3D Web Browser"]
 ```
 
-## Model Fisika Haptik
+## Haptic Physics Model
 
-Pengembang mendasarkan perhitungan komputasi gaya pada dekomposisi gaya Okamura yang dipadukan dengan model kontak Mahvash-Dupont. Secara matematis, sistem menghitung gaya aksial total melalui persamaan berikut:
+The developers base the computational force calculations on the Okamura force decomposition combined with the Mahvash Dupont contact model. Mathematically, the system computes the total axial force through the following equation:
 
 ```text
-Gaya Aksial Total = Gaya Kekakuan + Gaya Pemotongan + Gaya Gesekan
+Total Axial Force = Stiffness Force + Cutting Force + Friction Force
 ```
 
-### Model Kontak (Fase Praruktur)
+### Contact Model (Prerupture Phase)
 
-Sistem menggunakan pegas nonlinier Mahvash dan Dupont yang dikombinasikan dengan cabang viskoelastis Maxwell. Persamaan berikut merepresentasikan perhitungan gaya ujung jarum:
+The system utilizes the Mahvash and Dupont nonlinear spring combined with a Maxwell viscoelastic branch. The following equations represent the needle tip force calculation:
 
 ```text
-Gaya Ujung = a2 * delta^2 + a1 * delta + K(delta) * delta_k
-
-K(delta) = K' * delta_k (kekakuan yang bergantung pada tingkat deformasi)
-tau = D'/K' (konstanta waktu viskoelastis)
+Tip Force = a2 * delta^2 + a1 * delta + K(delta) * delta_k
+K(delta) = K' * delta_k (stiffness dependent on deformation level)
+tau = D'/K' (viscoelastic time constant)
 ```
 
-Cabang Maxwell dalam model ini bertugas menyediakan relaksasi viskoelastis. Dengan mekanisme ini, gaya yang dirasakan pengguna akan meluruh secara alami ketika pengguna menghentikan dorongan pada jarum.
+The Maxwell branch in this model serves to provide viscoelastic relaxation. With this mechanism, the force experienced by the user will decay naturally when the user stops pushing the needle.
 
-### Mekanisme Fraktur (Dari Ruptur ke Pemotongan)
+### Fracture Mechanism (From Rupture to Cutting)
 
-Ketika gaya ujung jarum mencapai ambang batas ruptur (Fr), jaringan biologis akan mengalami penetrasi. Sistem menyimulasikan kejadian ini melalui penurunan gaya secara instan menuju tingkat gaya pemotongan konstan (Fc).
+When the needle tip force reaches the rupture threshold (Fr), the biological tissue will undergo penetration. The system simulates this event through an instantaneous force drop towards a constant cutting force level (Fc).
 
 ```text
-Kejadian Penetrasi: Gaya ujung turun seketika dari Fr menjadi Fc
-Pemotongan: Gaya ujung = Fc = Rf * wc (ketangguhan fraktur dikalikan dengan lebar retakan)
+Penetration Event: Tip force drops instantly from Fr to Fc
+Cutting: Tip force = Fc = Rf * wc (fracture toughness multiplied by crack width)
 ```
 
-### Gesekan Poros (Gesekan Coulomb dan Viscous)
-
-Nilai gesekan akan meningkat secara proporsional seiring dengan bertambahnya kedalaman penyisipan jarum, karena area kontak antara poros jarum dan jaringan menjadi lebih luas.
+### Shaft Friction (Coulomb and Viscous Friction)
+The friction value will increase proportionally as the needle insertion depth increases, because the contact area between the needle shaft and the tissue becomes larger.
 
 ```text
-Gaya Gesekan = (mu_shaft * kedalaman) + (B_viscous * kecepatan) + f_stiction
+Friction Force = (mu_shaft * depth) + (B_viscous * velocity) + f_stiction
 ```
 
-### Parameter Lapisan Jaringan Fisik
+### Physical Tissue Layer Parameters
 
-| Lapisan Jaringan | Kedalaman Ruang | Nilai a1 | Nilai a2 | Nilai K' | Waktu tau (detik) | Gaya Fr (Ruptur) | Gaya Fc (Pemotongan) |
+| Tissue Layer | Spatial Depth | a1 Value | a2 Value | K' Value | tau Time (seconds) | Fr Force (Rupture) | Fc Force (Cutting) |
 |-------|-------|------|------|------|-------|--------------|--------------|
-| **Kulit** | 0 hingga 2 milimeter | 0.08 | 0.12 | 0.20 | 0.04 | 0.55 | 0.08 |
-| **Lemak** | 2 hingga 10 milimeter | 0.012 | 0.002 | 0.03 | 0.10 | 0.22 | 0.06 |
-| **Otot** | 10 hingga 35 milimeter | 0.018 | 0.004 | 0.06 | 0.06 | 0.35 | 0.12 |
+| **Skin** | 0 to 2 millimeters | 0.08 | 0.12 | 0.20 | 0.04 | 0.55 | 0.08 |
+| **Fat** | 2 to 10 millimeters | 0.012 | 0.002 | 0.03 | 0.10 | 0.22 | 0.06 |
+| **Muscle** | 10 to 35 millimeters | 0.018 | 0.004 | 0.06 | 0.06 | 0.35 | 0.12 |
 
-Pengembang merancang setiap lapisan agar memiliki karakteristik sensasi robekan yang berbeda. Kulit memiliki sifat kaku dengan tahanan ruptur yang kuat. Lemak terasa lebih lunak dan sangat patuh terhadap tekanan. Otot memiliki struktur berserat yang memberikan tingkat resistansi menengah.
+The developers design each layer to possess distinct tearing sensation characteristics. The skin features a rigid property with strong rupture resistance. The fat feels softer and highly compliant to pressure. The muscle possesses a fibrous structure that provides an intermediate level of resistance.
 
-## Kebutuhan Perangkat Keras
+## Hardware Requirements
 
-Sistem ini membutuhkan integrasi beberapa komponen perangkat keras yang spesifik untuk dapat berfungsi secara optimal:
+This system requires the integration of several specific hardware components to function optimally:
 
-1.  **Papan Pengembangan ESP32**: Bertindak sebagai otak komputasi utama yang memproses algoritma fisika dan mengendalikan modul lainnya.
-2.  **Motor DC dengan Driver H-Bridge**: Pengembang menyarankan penggunaan modul driver TB6612FNG atau modul sejenis yang mampu mengendalikan arah dan kecepatan putaran motor secara presisi.
-    *   Pin PWMA wajib terhubung ke pin IO18 pada ESP32.
-    *   Pin AIN1 wajib terhubung ke pin IO19 pada ESP32.
-    *   Pin AIN2 wajib terhubung ke pin IO23 pada ESP32.
-3.  **Enkoder Putar Magnetik AS5600**: Sensor ini berkomunikasi melalui protokol antarmuka I2C untuk membaca sudut putaran secara presisi yang dikonversi menjadi kedalaman jarum.
-    *   Pin SDA wajib terhubung ke pin IO21 pada ESP32.
-    *   Pin SCL wajib terhubung ke pin IO22 pada ESP32.
-4.  **Mekanisme Kenop Putar**: Pengguna harus memasang kenop putar fisik yang terhubung langsung ke poros motor untuk memberikan antarmuka interaksi mekanis dengan pengguna.
+1.  **ESP32 Development Board**: Acts as the primary computational brain that processes the physics algorithms and controls other modules.
+2.  **DC Motor with H Bridge Driver**: The developers recommend using the TB6612FNG driver module or similar modules capable of controlling the motor rotation direction and speed precisely.
+    *   You must connect the PWMA pin to the IO18 pin on the ESP32.
+    *   You must connect the AIN1 pin to the IO19 pin on the ESP32.
+    *   You must connect the AIN2 pin to the IO23 pin on the ESP32.
+3.  **AS5600 Magnetic Rotary Encoder**: This sensor communicates through the I2C interface protocol to read the rotation angle precisely, which the system converts into needle depth.
+    *   You must connect the SDA pin to the IO21 pin on the ESP32.
+    *   You must connect the SCL pin to the IO22 pin on the ESP32.
+4.  **Rotary Knob Mechanism**: The user must install a physical rotary knob connected directly to the motor shaft to provide a mechanical interaction interface for the user.
 
-## Panduan Instalasi dan Konfigurasi Detail
+## Detailed Installation and Configuration Guide
 
-Pengguna harus mengikuti prosedur instalasi berikut secara berurutan dan cermat untuk mengonfigurasi perangkat keras serta perangkat lunak sistem simulasi ini.
+Users must follow these installation procedures sequentially and carefully to configure the hardware and software of this simulation system.
 
-### 1. Prosedur Pemasangan Firmware ke ESP32
+### 1. ESP32 Firmware Flashing Procedure
 
-1.  **Unduh dan Instal Arduino IDE**: Pengguna perlu mengunduh versi terbaru Arduino IDE dari situs resmi Arduino dan melakukan instalasi pada sistem operasi komputer.
-2.  **Konfigurasi Papan ESP32**: Buka menu *File*, lalu pilih *Preferences*. Pada kolom *Additional Boards Manager URLs*, pengguna wajib memasukkan tautan `https://dl.espressif.com/dl/package_esp32_index.json` untuk mengunduh pustaka papan pengembangan ESP32.
-3.  **Instalasi Library ESP32**: Buka menu *Tools*, arahkan ke *Board*, lalu pilih *Boards Manager*. Lakukan pencarian dengan kata kunci "esp32" yang diterbitkan oleh Espressif Systems, kemudian klik tombol instal untuk menyelesaikan proses konfigurasi papan.
-4.  **Buka Berkas Utama**: Buka berkas bernama `virtual-wall32.ino` yang terdapat di dalam direktori root proyek ini menggunakan aplikasi Arduino IDE.
-5.  **Pemilihan Papan dan Port Komunikasi**: Buka menu *Tools*, atur opsi *Board* ke varian ESP32 yang pengguna gunakan (sebagai contoh, DOIT ESP32 DEVKIT V1). Selanjutnya, pilih port komunikasi (COM Port) yang sesuai dengan jalur koneksi kabel USB ke mikrokontroler ESP32.
-6.  **Proses Pemindahan Kode**: Klik tombol *Upload* pada Arduino IDE dan tunggu instruksi layar hingga proses kompilasi kode dan pemindahan data (flashing) ke dalam memori ESP32 selesai sepenuhnya.
+1.  **Download and Install Arduino IDE**: Users need to download the latest version of Arduino IDE from the official Arduino website and install it on their computer operating system.
+2.  **Configure ESP32 Board**: Open the *File* menu, then select *Preferences*. In the *Additional Boards Manager URLs* field, users must enter the link `https://dl.espressif.com/dl/package_esp32_index.json` to download the ESP32 development board library.
+3.  **Install ESP32 Library**: Open the *Tools* menu, navigate to *Board*, then select *Boards Manager*. Perform a search using the keyword "esp32" published by Espressif Systems, then click the install button to complete the board configuration process.
+4.  **Open Main File**: Open the file named `virtual-wall32.ino` located in the root directory of this project using the Arduino IDE application.
+5.  **Select Board and Communication Port**: Open the *Tools* menu, set the *Board* option to the ESP32 variant that you use (for example, DOIT ESP32 DEVKIT V1). Next, select the appropriate communication port (COM Port) that corresponds to the USB cable connection path to the ESP32 microcontroller.
+6.  **Code Uploading Process**: Click the *Upload* button on the Arduino IDE and wait for the screen instructions until the code compilation and data flashing process into the ESP32 memory finishes completely.
 
-### 2. Menjalankan Sistem Visualisasi Tiga Dimensi
+### 2. Running the Three Dimensional Visualization System
 
-1.  **Gunakan Peramban Pendukung Web Serial**: Buka berkas `visualization3d.html` secara eksklusif menggunakan peramban Google Chrome atau Microsoft Edge. Pengembang mewajibkan penggunaan peramban ini karena kelancaran sistem sangat bergantung pada fungsionalitas antarmuka pemrograman aplikasi Web Serial (Web Serial API) yang secara bawaan tidak tersedia di semua peramban web.
-2.  **Penyajian Berkas via Server Lokal (Sangat Disarankan)**: Agar peramban web dapat memuat keseluruhan aset dengan sempurna dan menghindari masalah kebijakan silang asal (CORS), pengguna sangat disarankan untuk menjalankan antarmuka ini melalui server web lokal. Pengguna dapat menggunakan ekstensi Live Server pada perangkat lunak Visual Studio Code, atau menggunakan aplikasi tumpukan peladen web mandiri seperti Laragon atau XAMPP. Buka antarmuka tersebut melalui alamat lokal, sebagai contoh: `http://localhost/Haptic-Knob-ESP32/virtual-wall32/visualization3d.html`.
-3.  **Koneksi Perangkat Fisik**: Setelah antarmuka web terbuka dengan sempurna, klik tombol "Connect ESP32" yang terdapat pada antarmuka. Peramban web akan menampilkan kotak dialog pop-up konfirmasi port serial. Pilih port serial yang secara fisik terhubung dengan perangkat ESP32 pengguna, lalu konfirmasi dengan menekan tombol penghubung (Connect).
+1.  **Use a Web Serial Supported Browser**: Open the `visualization3d.html` file exclusively using the Google Chrome or Microsoft Edge browser. The developers mandate the use of these browsers because the system fluidity relies heavily on the Web Serial Application Programming Interface (Web Serial API) functionality, which is not natively available in all web browsers.
+2.  **Serve Files via Local Server (Highly Recommended)**: To allow the web browser to load all assets perfectly and avoid Cross Origin Resource Sharing (CORS) policy issues, users are highly advised to run this interface through a local web server. Users can utilize the Live Server extension in the Visual Studio Code software, or use a standalone web server stack application such as Laragon or XAMPP. Open the interface through the local address, for example: `http://localhost/Haptic-Knob-ESP32/virtual-wall32/visualization3d.html`.
+3.  **Physical Device Connection**: After the web interface opens perfectly, click the "Connect ESP32" button available on the interface. The web browser will display a serial port confirmation pop up dialog box. Select the serial port that physically connects to the user's ESP32 device, then confirm by pressing the Connect button.
 
-### 3. Konfigurasi Visualisasi Python Klasik (Pendekatan Opsional)
+### 3. Classic Python Visualization Configuration (Optional Approach)
 
-Bagi pengguna yang lebih mengutamakan penggunaan lingkungan visualisasi berbasis skrip Python, pengguna dipersilakan untuk mengonfigurasi dan menjalankan tahapan instruksi berikut melalui jendela terminal perintah.
+For users who prioritize using a Python script based visualization environment, users are welcome to configure and execute the following instruction steps through the command terminal window.
 
-1.  **Membangun Lingkungan Virtual**: Jalankan perintah `python -m venv venv` pada terminal untuk menciptakan sebuah lingkungan distribusi instalasi Python yang terisolasi dari sistem utama.
-2.  **Proses Aktivasi Lingkungan Virtual**: Apabila pengguna beroperasi menggunakan platform sistem operasi Windows, jalankan perintah eksekusi skrip `venv\Scripts\activate`.
-3.  **Memasang Modul Dependensi**: Jalankan perintah pemrosesan paket `pip install -r requirements.txt` untuk mengunduh dan mengonfigurasi seluruh modul pustaka pemrograman yang dibutuhkan oleh sistem visualisasi Python ini.
-4.  **Menjalankan Program Visualisasi**: Eksekusi perintah `python visualization.py` untuk mengaktifkan antarmuka grafis visualisasi.
+1.  **Build a Virtual Environment**: Execute the command `python -m venv venv` in the terminal to create a Python installation distribution environment isolated from the main system.
+2.  **Virtual Environment Activation Process**: If the user operates on the Windows operating system platform, run the script execution command `venv\Scripts\activate`.
+3.  **Install Dependency Modules**: Run the package processing command `pip install -r requirements.txt` to download and configure all programming library modules required by this Python visualization system.
+4.  **Run the Visualization Program**: Execute the command `python visualization.py` to activate the visualization graphical interface.
 
-## Mekanisme Pengendalian Sistem
+## System Control Mechanism
 
-### Kontrol Antarmuka Visualisasi Tiga Dimensi pada Peramban
+### Three Dimensional Visualization Interface Controls on Browser
 
-Sistem visualisasi menyediakan kumpulan fungsi pengendalian navigasi ruang untuk memfasilitasi pengguna dalam memantau secara presisi setiap tahap proses simulasi.
+The visualization system provides a set of spatial navigation control functions to facilitate users in precisely monitoring every stage of the simulation process.
 
-*   **Tahan dan Geser Tombol Kiri Tetikus**: Pengguna melakukan tindakan ini untuk merotasi orientasi sudut pandang kamera mengelilingi pusat objek tiga dimensi.
-*   **Gulir Roda Tetikus**: Pengguna memanipulasi roda tetikus untuk mengontrol tingkat pembesaran atau pengecilan fokus tampilan visual pada area penyisipan.
-*   **Tombol Navigasi Panah Atas dan Bawah**: Pengguna menggunakan tombol ini khusus untuk menyimulasikan pergerakan translasional jarum dalam ruang virtual apabila sistem perangkat keras mekanis sedang tidak terkoneksi.
-*   **Tombol Pintasan Papan Ketik R**: Pengguna menekan tombol ini untuk menginisialisasi ulang kordinat posisi jarum kembali titik permukaan kulit terluar.
-*   **Tombol Antarmuka Connect ESP32**: Pengguna menekan tombol layar ini untuk memicu dialog antarmuka pemrograman aplikasi peramban agar membuka jalur komunikasi serial dengan mikrokontroler perangkat keras.
+*   **Hold and Drag Left Mouse Button**: Users perform this action to rotate the camera perspective orientation around the center of the three dimensional object.
+*   **Scroll Mouse Wheel**: Users manipulate the mouse wheel to control the magnification or reduction level of the visual focus on the insertion area.
+*   **Up and Down Arrow Navigation Keys**: Users utilize these keys specifically to simulate the translational movement of the needle in virtual space when the mechanical hardware system is not connected.
+*   **Keyboard Shortcut Key R**: Users press this key to reinitialize the needle position coordinates back to the outermost skin surface point.
+*   **Connect ESP32 Interface Button**: Users press this screen button to trigger the browser application programming interface dialog to open the serial communication line with 
+the hardware microcontroller.
 
-### Kontrol Navigasi Visualisasi Python Klasik
+### Classic Python Visualization Navigation Controls
+*   **Up and Down Arrow Navigation Keys**: Users press the up and down navigation keys to force a shift in the simulated needle pushing direction.
+*   **Keyboard Shortcut Key R**: Users press the R key to reset the tool calibration spatial metric calculations.
+*   **Keyboard Shortcut Key ESC**: Users press the Escape key to send an execution cancellation command and terminate the Python program instantly.
 
-*   **Tombol Navigasi Panah Atas dan Bawah**: Pengguna menekan tombol navigasi atas dan bawah untuk memaksa pergeseran simulasi arah dorongan jarum.
-*   **Tombol Pintasan Papan Ketik R**: Pengguna menekan tombol R untuk mengatur ulang kalkulasi metrik spasial kalibrasi alat.
-*   **Tombol Pintasan Papan Ketik ESC**: Pengguna menekan tombol Escape untuk mengirimkan perintah pembatalan eksekusi dan menutup program Python secara instan.
-
-## Protokol Komunikasi Serial Sistem
-
-Mikrokontroler ESP32 secara aktif dan konstan memancarkan paket data pembaruan status melalui jalur antarmuka serial dengan kecepatan modulasi 115200 baud pada frekuensi stabil 20 Hertz. Format enkapsulasi data berbentuk deret karakter kalimat (string) dengan format struktur nilai properti sebagai berikut:
+## System Serial Communication Protocol
+The ESP32 microcontroller actively and constantly transmits status update data packets through the serial interface line with a modulation speed of 115200 baud at a stable frequency of 20 Hertz. The data encapsulation format takes the form of a character string sequence with the following property value structure format:
 
 `Depth_mm:12.34 Force_cmd:0.1823 State:1.0 Layer:1 FTip:0.0600 FFric:0.0370`
 
-Pengembang memecah dan mendefinisikan masing-masing ruas variabel paket data sebagai berikut:
-*   `Depth_mm` menunjukkan kalkulasi tingkat kedalaman translasional masuknya proksimal jarum dalam representasi satuan milimeter. Nilai angka 0 secara spesifik mengindikasikan bahwa jarum sedang beristirahat tepat di batas permukaan jaringan kulit terluar.
-*   `Force_cmd` merepresentasikan besaran agregat daya keluaran yang didistribusikan menuju motor aktuator yang dinormalisasi dalam rentang nilai desimal 0 hingga 1.
-*   `State` menggambarkan parameter kuantitatif siklus interaksi fisika ujung jarum dengan lingkungan. Nilai angka 0 melambangkan bahwa jarum sedang bergerak bebas di medium udara. Nilai 0.5 mendefinisikan bahwa jaringan sedang berada pada fase praruktur atau proses deformasi bentuk dasar. Nilai 1.0 mengonfirmasi bahwa ujung jarum tengah melakukan penetrasi pada fase pemotongan serat jaringan biologis secara konstan.
-*   `Layer` menunjukkan kordinat posisional lapisan spasial dari jaringan medium tempat ujung jarum saat ini berada secara waktu nyata. Sistem menggunakan nilai -1 untuk medium udara bebas, indeks 0 untuk jaringan epidermal kulit, indeks 1 untuk jaringan subkutan lemak, dan indeks 2 untuk formasi massa otot.
-*   `FTip` menginformasikan nilai derivatif kalkulasi komputasional dari resistansi dinamis gaya yang tereksitasi khusus memengaruhi area permukaan sentuh ujung jarum.
-*   `FFric` menginformasikan nilai derivatif kalkulasi fiksasi gesekan kumulatif kinetis yang secara natural memberikan resistensi penghambat gerakan linier di seluruh area bidang luas permukaan batang poros luar jarum.
+The developers parse and define each segment of the data packet variables as follows:
+*   `Depth_mm` indicates the translational depth calculation of the proximal needle insertion represented in millimeter units. A numerical value of 0 specifically indicates that the needle is resting exactly at the boundary of the outermost skin tissue surface.
+*   `Force_cmd` represents the aggregate magnitude of output power distributed to the actuator motor, normalized within a decimal value range of 0 to 1.
+*   `State` describes the quantitative parameter of the needle tip physical interaction cycle with the environment. A numerical value of 0 symbolizes that the needle is moving freely in the air medium. A value of 0.5 defines that the tissue is in the prerupture phase or basic shape deformation process. A value of 1.0 confirms that the needle tip is currently penetrating the biological tissue fiber cutting phase constantly.
+*   `Layer` denotes the real time positional coordinates of the spatial layer of the medium tissue where the needle tip currently resides. The system utilizes a value of -1 for the free air medium, an index of 0 for the epidermal skin tissue, an index of 1 for the subcutaneous fat tissue, and an index of 2 for the muscle mass formation.
+*   `FTip` informs the derivative value of the computational calculation of the dynamic force resistance specifically excited affecting the needle tip contact surface area.
+*   `FFric` informs the derivative value of the cumulative kinetic friction fixation calculation which naturally provides linear movement blocking resistance across the entire surface area of the outer needle shaft.
 
-## Prosedur Inisiasi dan Kalibrasi Alat Fisik
+## Physical Device Initiation and Calibration Procedure
 
-Pengguna sistem sangat diwajibkan untuk melaksanakan prosedur kalibrasi inisialisasi awal. Langkah operasional ini berfungsi untuk menetapkan ulang titik nol referensi kartesian dari instrumen mekanis motor sebelum eksekusi percobaan berlangsung.
+System users are strictly required to execute the initial initialization calibration procedure. This operational step serves to reestablish the cartesian reference zero point of the motor mechanical instrument before the experimental execution takes place.
 
-1.  Berikan daya masukan listrik yang memadai pada seluruh komponen papan sirkuit perangkat. Instrumen kenop mekanis tersebut akan secara otonom merotasi sumbu untuk mencari dan mengunci posisi referensi titik tengah spasial pada batas geometri rotasi 180 derajat.
-2.  Pengguna wajib menahan kenop sentral tersebut dalam posisi ekuilibrium atau stabil total selama masa durasi pengawasan waktu dua detik penuh berturut-turut.
-3.  Sistem komputasi secara mandiri akan segera merekam jejak posisi diam rotasional tersebut untuk kemudian diartikulasikan sebagai batas kordinat vertikal nol absolut pada ekuator permukaan luar kulit simulasi.
-4.  Pengguna dapat langsung memanipulasi rotasi putar mekanis perangkat kenop searah gerakan jarum jam (Clockwise) untuk memproduksi gaya simulasi gaya dorong penetrasi linear masuknya ujung jarum, serta memanipulasi torsi putaran ke arah yang berlawanan (Counter-Clockwise) untuk menciptakan efek tarik gaya ekstraksi linier keluarnya keseluruhan bodi jarum.
+1.  Provide adequate electrical input power to all device circuit board components. The mechanical knob instrument will autonomously rotate its axis to search for and lock onto the spatial center reference position within a 180 degree geometric rotation limit.
+2.  The user must hold the central knob in a state of total equilibrium or stability for a full observation duration period of two consecutive seconds.
+3.  The computational system will independently record this rotational resting position trace immediately, which it will then articulate as the absolute vertical zero coordinate boundary at the equator of the simulated outer skin surface.
+4.  The user can directly manipulate the mechanical rotary rotation of the knob device clockwise to produce a linear penetration pushing force simulation of the needle tip entry, and manipulate the rotation torque in the counter clockwise direction to create a linear extraction force pulling effect of the entire needle body exiting.
 
-## Panduan Analisis Penanganan Kendala Teknis (Troubleshooting)
+## Technical Issue Troubleshooting Analysis Guide
 
-### Perangkat Visualisasi Tiga Dimensi Menolak Membuka Sesi Koneksi
+### Three Dimensional Visualization Device Refuses to Open Connection Session
 
-Pengguna pertama-tama harus merefleksikan spesifikasi peramban dan memastikan telah menggunakan produk peramban web mutakhir seperti Google Chrome atau Microsoft Edge. Pengguna patut mengingat bahwa protokol antarmuka akses Web Serial API sangat krusial serta bersifat mutlak agar jalur komunikasi berhasil terjadi. Apabila keluhan terus berlanjut, periksa dan validasi koneksi konduktor pada jalur kabel USB sembari mengonfirmasi bahwa pustaka paket driver komunikasi portabilitas jembatan (seperti chipset IC CH340 atau IC CP210x) telah dimuat secara benar oleh *kernel* inti sistem operasi.
+Users must first reflect on their browser specifications and ensure they are utilizing a modern web browser product such as Google Chrome or Microsoft Edge. Users should remember that the Web Serial API access interface protocol is highly critical and absolute for the communication line to occur successfully. If complaints persist, inspect and validate the conductor connection on the USB cable line while confirming that the bridge portability communication driver package library (such as the CH340 IC or CP210x IC chipset) has been loaded correctly by the operating system core kernel.
 
-### Aktuator Motor DC Gagal Mengimplementasikan Umpan Balik Mekanis
+### DC Motor Actuator Fails to Implement Mechanical Feedback
 
-Pengguna perlu secara aktif memverifikasi tingkat kompatibilitas jalur skema perakitan kabel elektronika agar struktur pin perangkat keras tidak bertentangan dengan blok definisi kode program di dalam berkas komponen `knob.cpp`. Pastikan dengan saksama bahwa struktur kabel pin IO18, IO19, dan IO23 sepenuhnya terintegrasi ke blok port modul papan driver kendali motor, di samping memastikan bahwa pin antarmuka IO21 serta IO22 telah menjalin komunikasi yang solid dengan pin port modul enkoder rotasional protokol I2C. Pengguna juga wajib memastikan pasokan sumber energi catu daya memiliki cukup suplai arus listrik (Ampere) yang esensial guna memenuhi kehausan energi operasional motor DC berkinerja tinggi.
+Users need to actively verify the compatibility level of the electronic wiring assembly schematic path so that the hardware pin structure does not conflict with the program code definition block inside the `knob.cpp` component file. Carefully ensure that the wiring structure of pins IO18, IO19, and IO23 integrates completely into the port block of the motor control driver board module, alongside ensuring that interface pins IO21 and IO22 have established solid communication with the port pins of the I2C protocol rotational encoder module. Users must also ensure the power supply energy source provides sufficient electrical current supply (Amperes) essential to meet the operational energy hunger of the high performance DC motor.
 
-### Kurva Kurvatur Resistansi Umpan Balik Gaya Terasa Anomali atau Kurang Akurat
+### Force Feedback Resistance Curvature Curve Feels Anomalous or Inaccurate
 
-Pengguna proyek riset ini selalu diberikan privilese modifikasi tanpa batas untuk menyetel ulang koefisien matematis fisis model lingkungan masing-masing simulasi anatomi lapisan jaringan. Pengaturan variabel ini tersusun dengan rapi pada indeks blok memori *array* `layers[]` di dalam *source code* utama `virtual-wall32.ino`. Bagi pengguna lanjut, disarankan pula untuk secara iteratif melaksanakan tuning modifikasi manipulasi besaran tetapan konstanta kalkulasi variabel makro `MU_SHAFT` serta rentang `B_VISCOUS` guna menciptakan manifestasi realitas hambatan tarik gesekan poros yang senatural mungkin.
+Users of this research project always receive unlimited modification privileges to retune the physical mathematical coefficients of each anatomical tissue layer simulation environment model. These variable settings are organized neatly in the memory block index of the `layers[]` array inside the main source code `virtual-wall32.ino`. For advanced users, we also recommend iteratively executing tuning modifications to manipulate the macro variable calculation constant values `MU_SHAFT` and the `B_VISCOUS` range to create a manifestation of the shaft friction pulling resistance reality that is as natural as possible.
 
-## Daftar Pustaka dan Referensi Akademik Riset
+## Bibliography and Academic Research References
 
-Sistem simulasi antarmuka haptik tingkat lanjut ini secara metodologis direkayasa dan dibangun dengan berasaskan landasan empiris literatur ilmiah terpandang yang meneliti ranah kontrol komputasi haptik serta pemodelan sistem dinamika biomekanika jaringan:
-
+This advanced haptic interface simulation system was methodologically engineered and built based on the empirical foundation of respected scientific literature examining the realm of computational haptic control and tissue biomechanical dynamics system modeling:
 *   Okamura, A. M., Simone, C., & O'Leary, M. D. (2004). *Force modeling for needle insertion into soft tissue*. IEEE Trans. Biomedical Engineering, 51(10), 1707-1716.
 *   Mahvash, M. & Dupont, P. E. (2010). *Mechanics of dynamic needle insertion into a biological material*. IEEE Trans. Biomedical Engineering, 57(4), 934-943.
 *   Delbos, B., Chalard, R., Lelevé, A., & Moreau, R. (2024). *A generalized tracking wall approach to the haptic simulation of tip forces during needle insertion*. IEEE Trans. Haptics, 18(1), 110-123.
 
-## Penetapan Hak Cipta dan Lisensi Distribusi Penggunaan
+## Copyright and Usage Distribution License Determination
 
-Para akademisi beserta keseluruhan struktur unit divisi pengembang riset mendedikasikan secara utuh proyek rancang bangun sumber terbuka ini semata-mata dengan tujuan mulia guna memajukan agenda pendidikan fundamental, menyokong transfer keilmuan eksploratif, serta secara kolektif menyukseskan program penelitian lanjutan tanpa tendensi dan muatan unsur komersialisasi.
+The academics along with the entire structure of the research development division unit dedicate this open source engineering project entirely with the noble purpose of advancing the fundamental educational agenda, supporting exploratory knowledge transfer, and collectively ensuring the success of advanced research programs without any tendencies or elements of commercialization.
 
 **Tim Pengembang:**
-IFAC 2026 Team - Niceknob ITENAS
+* IFAC 2026 Team - Niceknob ITENAS
+**Development Team:**
+* IFAC 2026 Team Niceknob ITENAS
 * Zakhwa Aliya (152024032)
 * Dzakiyya Puteri Aulia (152024127)
