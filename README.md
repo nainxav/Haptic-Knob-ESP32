@@ -1,9 +1,5 @@
 # Haptic Knob - Needle Insertion Simulation (ESP32)
 
-**Tim Pengembang:**
-* Zakhwa Aliya (152024032)
-* Dzakiyya Puteri Aulia (152024127)
-
 **Demo Video:**
 [Tonton Video Demonstrasi Sistem Melalui Instagram Reels](https://www.instagram.com/reel/DZNVUA0p1P7/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==)
 
@@ -207,3 +203,8 @@ Sistem simulasi antarmuka haptik tingkat lanjut ini secara metodologis direkayas
 ## Penetapan Hak Cipta dan Lisensi Distribusi Penggunaan
 
 Para akademisi beserta keseluruhan struktur unit divisi pengembang riset mendedikasikan secara utuh proyek rancang bangun sumber terbuka ini semata-mata dengan tujuan mulia guna memajukan agenda pendidikan fundamental, menyokong transfer keilmuan eksploratif, serta secara kolektif menyukseskan program penelitian lanjutan tanpa tendensi dan muatan unsur komersialisasi.
+
+**Tim Pengembang:**
+IFAC 2026 Team - Niceknob ITENAS
+* Zakhwa Aliya (152024032)
+* Dzakiyya Puteri Aulia (152024127)
