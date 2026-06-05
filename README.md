@@ -35,29 +35,19 @@ This parallel computing approach resolves the bottleneck issues that frequently 
 
 ```mermaid
 graph TD
-    subgraph "Mikrokontroler ESP32"
-        subgraph "Core 1: Loop Kendali Haptik (Prioritas Tinggi)"
-            A[Membaca Data Sensor Enkoder I2C] --> B[Menghitung Kedalaman Posisi Jarum]
-            B --> C[Mengevaluasi Model Fisika Okamura]
-            C --> D[Menghasilkan Sinyal PWM Motor]
-    subgraph "ESP32 Microcontroller"
-        subgraph "Core 1: Haptic Control Loop (High Priority)"
+    subgraph ESP32["ESP32 Microcontroller / Mikrokontroler ESP32"]
+        subgraph Core1["Core 1: Haptic Control Loop (High Priority)"]
             A[Read I2C Encoder Sensor Data] --> B[Calculate Needle Position Depth]
             B --> C[Evaluate Okamura Physics Model]
             C --> D[Generate Motor PWM Signal]
         end
-        subgraph "Core 0: Komunikasi Serial (Prioritas Rendah)"
-            E[Menerima Data Fisika via FreeRTOS Queue] --> F[Memformat Data Menjadi String Serial]
-            F --> G[Mengirim Data ke Komputer]
-        subgraph "Core 0: Serial Communication (Low Priority)"
+        subgraph Core0["Core 0: Serial Communication (Low Priority)"]
             E[Receive Physics Data via FreeRTOS Queue] --> F[Format Data Into Serial String]
             F --> G[Send Data to Computer]
         end
     end
-    D -->|"Sinyal Kendali"| Motor["Motor DC Haptik"]
-    G -->|"Visualisasi Log"| Browser["Peramban Web 3D"]
-    D -->|"Control Signal"| Motor["Haptic DC Motor"]
-    G -->|"Log Visualization"| Browser["3D Web Browser"]
+    D -->|Control Signal| Motor[Haptic DC Motor]
+    G -->|Log Visualization| Browser[3D Web Browser]
 ```
 
 ## Haptic Physics Model
@@ -213,8 +203,6 @@ This advanced haptic interface simulation system was methodologically engineered
 
 The academics along with the entire structure of the research development division unit dedicate this open source engineering project entirely with the noble purpose of advancing the fundamental educational agenda, supporting exploratory knowledge transfer, and collectively ensuring the success of advanced research programs without any tendencies or elements of commercialization.
 
-**Tim Pengembang:**
-* IFAC 2026 Team - Niceknob ITENAS
 **Development Team:**
 * IFAC 2026 Team Niceknob ITENAS
 * Zakhwa Aliya (152024032)
