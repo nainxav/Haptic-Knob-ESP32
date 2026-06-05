@@ -37,8 +37,8 @@ enum NeedleState {
 
 NeedleState currentState = STATE_AIR;
 
-// Titik referensi sudut di mana "kulit" dimulai
-float surfaceAngleStart = 0.0f; 
+// Titik referensi sudut di mana "kulit" dimulai (menggunakan unwrapped angle untuk multi-turn)
+float surfaceAngleStartUnwrapped = 0.0f; 
 bool isCalibrated = false;
 
 void setup() {
@@ -54,13 +54,13 @@ void setup() {
   // Kalibrasi sederhana: Posisi setelah homing dianggap "0 mm" (permukaan kulit)
   // Kita beri waktu user memegang knob
   delay(2000); 
-  float currentAngle, dump1, dump2;
-  knob_get_status(&currentAngle, &dump1, &dump2);
-  surfaceAngleStart = currentAngle;
+  float dump1, currentAngleUnwrapped, dump2;
+  knob_get_status(&dump1, &currentAngleUnwrapped, &dump2);
+  surfaceAngleStartUnwrapped = currentAngleUnwrapped;
   isCalibrated = true;
   
-  Serial.print("Surface Calibrated at: ");
-  Serial.println(surfaceAngleStart);
+  Serial.print("Surface Calibrated at (unwrapped): ");
+  Serial.println(surfaceAngleStartUnwrapped);
 }
 
 void loop() {
@@ -73,12 +73,8 @@ void loop() {
 
   // Hitung kedalaman penetrasi (x) dalam mm
   // Positif = masuk ke dalam kulit (jika memutar ke kanan dari titik start)
-  float depth_deg = angleWrapped - surfaceAngleStart;
-  
-  // Handle wrapping angle (jika melewati 0/360) - opsional, 
-  // tapi lebih aman menggunakan logic selisih sudut terdekat jika rentang gerak pendek
-  if (depth_deg < -180) depth_deg += 360;
-  if (depth_deg > 180)  depth_deg -= 360;
+  // Menggunakan unwrapped angle untuk menghindari reset setiap 360 derajat
+  float depth_deg = angleUnwrapped - surfaceAngleStartUnwrapped;
 
   float depth_mm = depth_deg * DEG_TO_MM;
   float force_cmd = 0.0f;

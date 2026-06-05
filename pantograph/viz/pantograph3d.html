@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2-DOF Pantograph – Syringe Insertion Simulation</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a12; overflow: hidden; font-family: 'Segoe UI', system-ui, sans-serif; color: #e0e0e8; }
+  canvas { display: block; }
+
+  #hud {
+    position: fixed; top: 0; left: 0; width: 100%; pointer-events: none; z-index: 10;
+    display: flex; justify-content: space-between; padding: 20px 28px;
+  }
+  #hud > div { pointer-events: auto; }
+
+  .panel {
+    background: rgba(12,12,22,.82);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 14px; padding: 16px 22px;
+  }
+
+  h1 { font-size: 15px; font-weight: 600; letter-spacing: .4px; margin-bottom: 8px; color: #c0c0d0; }
+  .sub { font-size: 10px; color: #666; margin-bottom: 10px; letter-spacing: .2px; }
+
+  .metric { display: flex; align-items: baseline; gap: 6px; margin: 4px 0; }
+  .metric-label { font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: #888; min-width: 46px; }
+  .metric-value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .metric-sm .metric-value { font-size: 15px; }
+  .metric-unit { font-size: 12px; color: #555; }
+
+  .state-badge {
+    display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 11px;
+    font-weight: 700; letter-spacing: .6px; margin-top: 4px;
+  }
+  .layer-badge {
+    display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 11px;
+    font-weight: 700; letter-spacing: .6px; margin-top: 4px; margin-left: 6px;
+  }
+  .state-air      { background: rgba(80,180,255,.18); color: #60c0ff; }
+  .state-deform   { background: rgba(255,180,50,.18);  color: #ffb840; }
+  .state-cutting  { background: rgba(255,70,70,.18);   color: #ff5050; }
+  .layer-skin     { background: rgba(242,201,168,.2);  color: #f2c9a8; }
+  .layer-fat      { background: rgba(245,230,160,.2);  color: #f5e6a0; }
+  .layer-muscle   { background: rgba(176,48,48,.2);    color: #e05050; }
+
+  .conn-btn {
+    pointer-events: auto; cursor: pointer; display: block; width: 100%;
+    border: none; border-radius: 10px; padding: 10px 20px; margin-bottom: 8px;
+    font-size: 13px; font-weight: 600; letter-spacing: .3px; color: #fff;
+    transition: transform .15s, box-shadow .2s;
+  }
+  .conn-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 18px rgba(90,70,240,.4); }
+  .conn-btn:active { transform: scale(.97); }
+  .conn-btn.left  { background: linear-gradient(135deg,#3a6df0,#5b4de0); }
+  .conn-btn.right { background: linear-gradient(135deg,#f06a3a,#e04d5b); }
+  .conn-btn.connected { background: linear-gradient(135deg,#20a060,#18c070); }
+
+  .depth-bar-bg {
+    width: 100%; height: 6px; border-radius: 3px;
+    background: rgba(255,255,255,.08); margin-top: 10px; overflow: hidden;
+  }
+  .depth-bar-fill { height: 100%; border-radius: 3px; transition: width .08s, background .3s; width: 0%; }
+
+  #pantoCanvas {
+    margin-top: 10px; border-radius: 8px;
+    background: rgba(0,0,0,.3); border: 1px solid rgba(255,255,255,.05);
+  }
+  #forceCanvas {
+    margin-top: 10px; border-radius: 6px;
+    background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.05);
+  }
+
+  #bottomBar {
+    position: fixed; bottom: 0; left: 0; width: 100%;
+    display: flex; justify-content: center; gap: 18px;
+    padding: 14px 28px; pointer-events: none; z-index: 10;
+  }
+  .hint {
+    pointer-events: auto; font-size: 11px; color: #666; letter-spacing: .3px;
+    background: rgba(12,12,22,.7); padding: 6px 14px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,.05);
+  }
+  .hint kbd {
+    background: rgba(255,255,255,.1); padding: 1px 6px; border-radius: 4px;
+    font-family: inherit; font-size: 11px;
+  }
+
+  /* ---- Serial Log Panel ---- */
+  #logPanel {
+    position: fixed; bottom: 50px; right: 20px; z-index: 20;
+    width: 420px; pointer-events: auto;
+    background: rgba(8,8,16,.92); backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,.08); border-radius: 12px;
+    overflow: hidden; transition: height .25s ease, opacity .2s;
+  }
+  #logPanel.collapsed { height: 36px !important; }
+  #logPanel.collapsed #logBody { display: none; }
+
+  #logHeader {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 14px; cursor: pointer; user-select: none;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+  }
+  #logHeader:hover { background: rgba(255,255,255,.03); }
+  #logTitle { font-size: 11px; font-weight: 600; letter-spacing: .5px; color: #999; text-transform: uppercase; }
+  #logTitle .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  #logTitle .dot.live  { background: #40e080; box-shadow: 0 0 6px #40e080; }
+  #logTitle .dot.idle  { background: #666; }
+  #logToggleIcon { font-size: 14px; color: #666; transition: transform .2s; }
+  #logPanel.collapsed #logToggleIcon { transform: rotate(180deg); }
+  #logBody { padding: 0; }
+  #logContent {
+    height: 180px; overflow-y: auto; padding: 6px 12px;
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 11px; line-height: 1.6; color: #b0b0c0;
+    scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.1) transparent;
+  }
+  #logContent::-webkit-scrollbar { width: 5px; }
+  #logContent::-webkit-scrollbar-track { background: transparent; }
+  #logContent::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 3px; }
+  .log-line { white-space: nowrap; }
+  .log-ts    { color: #555; margin-right: 6px; }
+  .log-key   { color: #888; }
+  .log-depth { color: #60c0ff; }
+  .log-force { color: #ffaa40; }
+  .log-state { color: #ff5050; }
+  .log-layer { color: #f2c9a8; }
+  .log-info  { color: #40e080; }
+  .log-warn  { color: #e0c040; }
+  .log-left  { color: #7090ff; }
+  .log-right { color: #ff7060; }
+  #logFooter {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 12px; border-top: 1px solid rgba(255,255,255,.05);
+  }
+  #logCount { font-size: 10px; color: #555; font-variant-numeric: tabular-nums; }
+  #logClearBtn {
+    font-size: 10px; color: #666; background: rgba(255,255,255,.06);
+    border: none; border-radius: 4px; padding: 2px 10px; cursor: pointer;
+  }
+  #logClearBtn:hover { color: #aaa; background: rgba(255,255,255,.1); }
+  #logAutoScroll { font-size: 10px; color: #666; cursor: pointer; user-select: none; }
+  #logAutoScroll.active { color: #40e080; }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div>
+    <div class="panel">
+      <h1>2-DOF Pantograph</h1>
+      <div class="sub">DUAL HAPTIC KNOB – IFAC TEAM 2026</div>
+      <div class="metric">
+        <span class="metric-label">Pos X</span>
+        <span class="metric-value" id="posXVal">0.0</span>
+        <span class="metric-unit">mm</span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">Depth</span>
+        <span class="metric-value" id="depthVal">0.0</span>
+        <span class="metric-unit">mm</span>
+      </div>
+      <div class="metric metric-sm">
+        <span class="metric-label">Fx</span>
+        <span class="metric-value" id="fxVal">0.000</span>
+      </div>
+      <div class="metric metric-sm">
+        <span class="metric-label">Fy</span>
+        <span class="metric-value" id="fyVal">0.000</span>
+      </div>
+      <div class="metric metric-sm">
+        <span class="metric-label">τ₁</span>
+        <span class="metric-value" id="tau1Val">0.000</span>
+      </div>
+      <div class="metric metric-sm">
+        <span class="metric-label">τ₂</span>
+        <span class="metric-value" id="tau2Val">0.000</span>
+      </div>
+      <div>
+        <span class="state-badge state-air" id="stateBadge">AIR</span>
+        <span class="layer-badge" id="layerBadge" style="display:none"></span>
+      </div>
+      <div class="depth-bar-bg">
+        <div class="depth-bar-fill" id="depthBar"></div>
+      </div>
+      <canvas id="pantoCanvas" width="200" height="200"></canvas>
+      <canvas id="forceCanvas" width="220" height="80"></canvas>
+    </div>
+  </div>
+  <div>
+    <div class="panel" style="margin-bottom:12px;">
+      <h1>Joint Angles</h1>
+      <div class="metric metric-sm">
+        <span class="metric-label">θ₁</span>
+        <span class="metric-value" id="theta1Val">60.0</span>
+        <span class="metric-unit">°</span>
+      </div>
+      <div class="metric metric-sm">
+        <span class="metric-label">θ₂</span>
+        <span class="metric-value" id="theta2Val">120.0</span>
+        <span class="metric-unit">°</span>
+      </div>
+    </div>
+    <button class="conn-btn left" id="connectLeftBtn" onclick="connectLeft()">Connect Left ESP32</button>
+    <button class="conn-btn right" id="connectRightBtn" onclick="connectRight()">Connect Right ESP32</button>
+  </div>
+</div>
+
+<div id="logPanel">
+  <div id="logHeader" onclick="toggleLog()">
+    <span id="logTitle"><span class="dot idle" id="logDot"></span>Serial Monitor</span>
+    <span id="logToggleIcon">▼</span>
+  </div>
+  <div id="logBody">
+    <div id="logContent"></div>
+    <div id="logFooter">
+      <span id="logCount">0 lines</span>
+      <span id="logAutoScroll" class="active" onclick="toggleAutoScroll(event)">⇣ Auto-scroll</span>
+      <button id="logClearBtn" onclick="clearLog(event)">Clear</button>
+    </div>
+  </div>
+</div>
+
+<div id="bottomBar">
+  <span class="hint">Orbit: <kbd>Left Drag</kbd></span>
+  <span class="hint">Zoom: <kbd>Scroll</kbd></span>
+  <span class="hint">Move: <kbd>↑↓←→</kbd></span>
+  <span class="hint">Reset: <kbd>R</kbd></span>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ===================== PANTOGRAPH CONFIG =====================
+// Adjust these to match your physical hardware (all in mm)
+const PANTO = {
+  d:  38,       // half motor spacing
+  L1: 50,       // proximal link (left)
+  L2: 50,       // proximal link (right)
+  L3: 70,       // distal link (left)
+  L4: 70,       // distal link (right)
+  leftRestRad:  Math.PI / 3,       // 60° rest angle for left motor
+  rightRestRad: 2 * Math.PI / 3,   // 120° rest angle for right motor
+  leftScale:    Math.PI / 180,      // encoder-deg → pantograph-rad (negate if reversed)
+  rightScale:  -Math.PI / 180,
+  torqueScale:  0.005,              // force(N) → motor cmd scale
+};
+
+// Tissue surface in workspace-Y coordinate (mm from motor line).
+// End-effector rests above this; pushing past it enters tissue.
+const TISSUE_SURFACE_WS_Y = 105;
+
+// ===================== STATE =====================
+const state = {
+  theta1: PANTO.leftRestRad,
+  theta2: PANTO.rightRestRad,
+  vel1: 0, vel2: 0,
+  wsX: 0, wsY: 0,       // workspace end-effector (mm)
+  elbowAx: 0, elbowAy: 0,
+  elbowBx: 0, elbowBy: 0,
+  depthMm: 0,
+  lateralMm: 0,
+  fx: 0, fy: 0,          // workspace force
+  tau1: 0, tau2: 0,       // motor torques (cmd, -1..1)
+  fTip: 0, fFric: 0,
+  stateId: 0,             // 0 AIR, 1 DEFORM, 2 CUT
+  layerIdx: -1,
+  force: 0,
+  leftConnected: false,
+  rightConnected: false,
+};
+
+// ===================== FORWARD KINEMATICS =====================
+function forwardKinematics(th1, th2) {
+  const ax = -PANTO.d + PANTO.L1 * Math.cos(th1);
+  const ay =            PANTO.L1 * Math.sin(th1);
+  const bx =  PANTO.d + PANTO.L2 * Math.cos(th2);
+  const by =             PANTO.L2 * Math.sin(th2);
+
+  const dx = bx - ax, dy = by - ay;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist > PANTO.L3 + PANTO.L4 || dist < Math.abs(PANTO.L3 - PANTO.L4) || dist < 1e-6)
+    return null;
+
+  const a = (PANTO.L3 * PANTO.L3 - PANTO.L4 * PANTO.L4 + dist * dist) / (2 * dist);
+  const h2 = PANTO.L3 * PANTO.L3 - a * a;
+  if (h2 < 0) return null;
+  const h = Math.sqrt(h2);
+
+  const mx = ax + a * dx / dist;
+  const my = ay + a * dy / dist;
+
+  const p1x = mx + h * dy / dist, p1y = my - h * dx / dist;
+  const p2x = mx - h * dy / dist, p2y = my + h * dx / dist;
+
+  const [px, py] = p1y > p2y ? [p1x, p1y] : [p2x, p2y];
+  return { px, py, ax, ay, bx, by };
+}
+
+// ===================== JACOBIAN =====================
+function computeJacobian(th1, th2, fk) {
+  const { px, py, ax, ay, bx, by } = fk;
+  const ux = px - ax, uy = py - ay;
+  const vx = px - bx, vy = py - by;
+
+  const dAx = -PANTO.L1 * Math.sin(th1), dAy = PANTO.L1 * Math.cos(th1);
+  const dBx = -PANTO.L2 * Math.sin(th2), dBy = PANTO.L2 * Math.cos(th2);
+
+  const udA = ux * dAx + uy * dAy;
+  const vdB = vx * dBx + vy * dBy;
+
+  const det = ux * vy - uy * vx;
+  if (Math.abs(det) < 1e-6) return null;
+
+  return {
+    j11:  vy * udA / det, j12: -uy * vdB / det,
+    j21: -vx * udA / det, j22:  ux * vdB / det,
+  };
+}
+
+function computeTorques(J, fx, fy) {
+  return {
+    tau1: J.j11 * fx + J.j21 * fy,
+    tau2: J.j12 * fx + J.j22 * fy,
+  };
+}
+
+// ===================== UPDATE FK FROM ANGLES =====================
+function updateFK() {
+  const fk = forwardKinematics(state.theta1, state.theta2);
+  if (!fk) return;
+  state.wsX = fk.px;
+  state.wsY = fk.py;
+  state.elbowAx = fk.ax; state.elbowAy = fk.ay;
+  state.elbowBx = fk.bx; state.elbowBy = fk.by;
+  state.lateralMm = fk.px;
+  state.depthMm = Math.max(0, fk.py - TISSUE_SURFACE_WS_Y);
+}
+
+// ===================== THREE.JS SCENE =====================
+const LAYER = {
+  skin:   { thickness: 2,  color: 0xf2c9a8 },
+  fat:    { thickness: 8,  color: 0xf5e6a0 },
+  muscle: { thickness: 25, color: 0xb03030 },
+  deep:   { thickness: 15, color: 0x7a1e1e },
+};
+const TOTAL_DEPTH = Object.values(LAYER).reduce((s, l) => s + l.thickness, 0);
+const MAX_DISPLAY_DEPTH = 35;
+const TISSUE_WIDTH = 40;
+const TISSUE_LENGTH = 40;
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0c0c18);
+scene.fog = new THREE.FogExp2(0x0c0c18, 0.006);
+
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 500);
+camera.position.set(32, 35, 48);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, -10, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.07;
+controls.minDistance = 20;
+controls.maxDistance = 300;
+controls.maxPolarAngle = Math.PI * 0.85;
+controls.update();
+
+// ---- Lighting ----
+scene.add(new THREE.AmbientLight(0xc0c4e0, 0.5));
+const dirLight = new THREE.DirectionalLight(0xfff4e8, 1.8);
+dirLight.position.set(15, 30, 20);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(1024, 1024);
+dirLight.shadow.camera.near = 1; dirLight.shadow.camera.far = 80;
+dirLight.shadow.camera.left = -30; dirLight.shadow.camera.right = 30;
+dirLight.shadow.camera.top = 30;  dirLight.shadow.camera.bottom = -30;
+dirLight.shadow.bias = -0.002;
+scene.add(dirLight);
+scene.add(new THREE.DirectionalLight(0x6080ff, 0.6).translateX(-20).translateY(10).translateZ(-15));
+scene.add(new THREE.PointLight(0xffa040, 0.4, 60).translateX(-10).translateY(20).translateZ(10));
+
+// ---- Ground grid ----
+const gridHelper = new THREE.GridHelper(100, 40, 0x222240, 0x181830);
+gridHelper.position.y = -(TOTAL_DEPTH + 2);
+scene.add(gridHelper);
+
+// ===================== TISSUE BLOCK =====================
+const tissueGroup = new THREE.Group();
+scene.add(tissueGroup);
+
+let yOff = 0;
+const layerMeshes = {};
+const layerOrder = ['skin', 'fat', 'muscle', 'deep'];
+for (const name of layerOrder) {
+  const l = LAYER[name];
+  const mat = new THREE.MeshStandardMaterial({ color: l.color, roughness: 0.65, transparent: true, opacity: 0.88, side: THREE.DoubleSide });
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(TISSUE_WIDTH, l.thickness, TISSUE_LENGTH), mat);
+  mesh.position.y = -(yOff + l.thickness / 2);
+  mesh.castShadow = true; mesh.receiveShadow = true;
+  tissueGroup.add(mesh);
+  layerMeshes[name] = mesh;
+  yOff += l.thickness;
+}
+
+const surfaceLineMat = new THREE.MeshBasicMaterial({ color: 0xffddc0 });
+tissueGroup.add(new THREE.Mesh(new THREE.BoxGeometry(TISSUE_WIDTH + .2, .15, TISSUE_LENGTH + .2), surfaceLineMat).translateY(0.075));
+
+for (const name of layerOrder) {
+  const l = LAYER[name]; const mesh = layerMeshes[name];
+  const strip = new THREE.Mesh(
+    new THREE.BoxGeometry(0.3, l.thickness - .2, TISSUE_LENGTH + .4),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(l.color).multiplyScalar(1.3) })
+  );
+  strip.position.copy(mesh.position); strip.position.x = TISSUE_WIDTH / 2 + .15;
+  tissueGroup.add(strip);
+}
+
+// ---- Skin deformation ----
+const deformRes = 48;
+const deformGeom = new THREE.PlaneGeometry(TISSUE_WIDTH, TISSUE_LENGTH, deformRes, deformRes);
+deformGeom.rotateX(-Math.PI / 2);
+const deformMat = new THREE.MeshStandardMaterial({ color: LAYER.skin.color, roughness: .55, side: THREE.DoubleSide, transparent: true, opacity: 0 });
+const deformMesh = new THREE.Mesh(deformGeom, deformMat);
+deformMesh.position.y = 0.08; deformMesh.receiveShadow = true;
+tissueGroup.add(deformMesh);
+
+function updateDeformation(depth, lateralX) {
+  const posAttr = deformGeom.attributes.position;
+  const skinDeforming = state.stateId === 1 && state.layerIdx === 0 && depth > 0;
+  const indent = Math.max(0, Math.min(depth, LAYER.skin.thickness + 1));
+  deformMat.opacity = skinDeforming ? 0.95 : 0;
+  if (!skinDeforming) return;
+  const radius = 3.5 + indent * 0.5;
+  for (let i = 0; i < posAttr.count; i++) {
+    const x = posAttr.getX(i) - lateralX;
+    const z = posAttr.getZ(i);
+    const dist = Math.sqrt(x * x + z * z);
+    posAttr.setY(i, dist < radius ? -indent * Math.pow(1 - dist / radius, 2) : 0);
+  }
+  posAttr.needsUpdate = true;
+  deformGeom.computeVertexNormals();
+}
+
+// ===================== NEEDLE =====================
+const needleGroup = new THREE.Group();
+scene.add(needleGroup);
+
+const shaftLen = 50, shaftR = 0.35;
+const shaft = new THREE.Mesh(
+  new THREE.CylinderGeometry(shaftR, shaftR, shaftLen, 16),
+  new THREE.MeshStandardMaterial({ color: 0xd0d0d8, roughness: .18, metalness: .92 })
+);
+shaft.position.y = shaftLen / 2; shaft.castShadow = true;
+needleGroup.add(shaft);
+
+const tipLen = 4;
+const tipGeom = new THREE.ConeGeometry(shaftR, tipLen, 16); tipGeom.rotateX(Math.PI);
+const tip = new THREE.Mesh(tipGeom, new THREE.MeshStandardMaterial({ color: 0xe8e8f0, roughness: .1, metalness: .95 }));
+tip.position.y = -tipLen / 2; tip.castShadow = true;
+needleGroup.add(tip);
+
+const hub = new THREE.Mesh(
+  new THREE.CylinderGeometry(1.8, 1, 5, 8),
+  new THREE.MeshStandardMaterial({ color: 0x3070d0, roughness: .4, metalness: .1 })
+);
+hub.position.y = shaftLen + 2.5; hub.castShadow = true;
+needleGroup.add(hub);
+
+for (const side of [-1, 1]) {
+  const wing = new THREE.Mesh(
+    new THREE.BoxGeometry(6, .6, 2),
+    new THREE.MeshStandardMaterial({ color: 0x4488dd, roughness: .5, metalness: .05 })
+  );
+  wing.position.set(side * 4.5, shaftLen + 3, 0);
+  wing.rotation.z = side * 0.25;
+  wing.castShadow = true;
+  needleGroup.add(wing);
+}
+
+const glowRingMat = new THREE.MeshBasicMaterial({ color: 0xff4040, transparent: true, opacity: 0 });
+const glowRing = new THREE.Mesh(new THREE.TorusGeometry(1.2, .25, 8, 24), glowRingMat);
+glowRing.rotation.x = Math.PI / 2;
+needleGroup.add(glowRing);
+
+function updateNeedle(depthMm, lateralMm) {
+  needleGroup.position.y = -depthMm + tipLen / 2;
+  needleGroup.position.x = lateralMm * 0.5;
+}
+
+// ===================== DEPTH RULER =====================
+const rulerGroup = new THREE.Group();
+rulerGroup.position.x = -(TISSUE_WIDTH / 2 + 3);
+scene.add(rulerGroup);
+const rulerMat = new THREE.LineBasicMaterial({ color: 0x555570 });
+for (let mm = 0; mm <= TOTAL_DEPTH; mm += 5) {
+  const tick = mm % 10 === 0 ? 2.5 : 1.2;
+  rulerGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,-mm,0), new THREE.Vector3(-tick,-mm,0)]), rulerMat));
+}
+rulerGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,-TOTAL_DEPTH,0)]), rulerMat));
+const depthMarker = new THREE.Mesh(new THREE.SphereGeometry(.6, 12, 12), new THREE.MeshBasicMaterial({ color: 0xff6060 }));
+rulerGroup.add(depthMarker);
+
+// ===================== PUNCTURE PARTICLES =====================
+const pCount = 40;
+const pGeom = new THREE.BufferGeometry();
+const pPos = new Float32Array(pCount * 3);
+pGeom.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+const pMat = new THREE.PointsMaterial({ color: 0xff5040, size: .5, transparent: true, opacity: 0, sizeAttenuation: true });
+const particles = new THREE.Points(pGeom, pMat);
+scene.add(particles);
+let pAge = 999;
+const pVel = Array.from({ length: pCount }, () => new THREE.Vector3());
+
+function triggerPunctureEffect(yPos = 0) {
+  pAge = 0; particles.position.y = yPos;
+  for (let i = 0; i < pCount; i++) {
+    pPos[i*3] = (Math.random()-.5)*2; pPos[i*3+1] = 0; pPos[i*3+2] = (Math.random()-.5)*2;
+    pVel[i].set((Math.random()-.5)*12, Math.random()*8+4, (Math.random()-.5)*12);
+  }
+}
+function updateParticles(dt) {
+  if (pAge > 2) return; pAge += dt;
+  for (let i = 0; i < pCount; i++) {
+    pVel[i].y -= 20 * dt;
+    pPos[i*3] += pVel[i].x*dt; pPos[i*3+1] += pVel[i].y*dt; pPos[i*3+2] += pVel[i].z*dt;
+  }
+  pGeom.attributes.position.needsUpdate = true;
+  pMat.opacity = Math.max(0, 1 - pAge / 1.2) * .8;
+}
+
+// ===================== SERIAL (DUAL) =====================
+let leftPort = null, rightPort = null;
+let leftReader = null, rightReader = null;
+let leftWriter = null, rightWriter = null;
+let leftBuf = '', rightBuf = '';
+let leftAngleOffset = null, rightAngleOffset = null;
+let leftWriting = false, rightWriting = false;
+
+async function connectPort(side) {
+  if (!('serial' in navigator)) { alert('Web Serial API not supported. Use Chrome/Edge.'); return; }
+  try {
+    const port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+    const writer = port.writable.getWriter();
+    if (side === 'left') {
+      leftPort = port; leftWriter = writer; state.leftConnected = true;
+      leftAngleOffset = null;
+      document.getElementById('connectLeftBtn').textContent = 'Left Connected';
+      document.getElementById('connectLeftBtn').classList.add('connected');
+      addLogLine('Left ESP32 connected', 'info');
+      readSerialLoop(port, 'left');
+    } else {
+      rightPort = port; rightWriter = writer; state.rightConnected = true;
+      rightAngleOffset = null;
+      document.getElementById('connectRightBtn').textContent = 'Right Connected';
+      document.getElementById('connectRightBtn').classList.add('connected');
+      addLogLine('Right ESP32 connected', 'info');
+      readSerialLoop(port, 'right');
+    }
+    if (state.leftConnected || state.rightConnected) {
+      if (dummyInterval) clearInterval(dummyInterval);
+      logDot.className = 'dot live';
+    }
+  } catch (e) { console.warn('Serial connect failed:', e); }
+}
+window.connectLeft = () => connectPort('left');
+window.connectRight = () => connectPort('right');
+
+async function readSerialLoop(port, side) {
+  const decoder = new TextDecoderStream();
+  port.readable.pipeTo(decoder.writable);
+  const reader = decoder.readable.getReader();
+  if (side === 'left') leftReader = reader; else rightReader = reader;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (side === 'left') {
+        leftBuf += value;
+        let lines = leftBuf.split('\n'); leftBuf = lines.pop();
+        for (const l of lines) parseSerialLine(l.trim(), 'left');
+      } else {
+        rightBuf += value;
+        let lines = rightBuf.split('\n'); rightBuf = lines.pop();
+        for (const l of lines) parseSerialLine(l.trim(), 'right');
+      }
+    }
+  } catch (e) { console.warn(`${side} serial error`, e); }
+}
+
+function parseSerialLine(line, side) {
+  if (!line) return;
+  if (line.startsWith('A:')) {
+    const parts = line.substring(2).split(',');
+    const angle = parseFloat(parts[0]) || 0;
+    const vel   = parseFloat(parts[1]) || 0;
+    if (side === 'left') {
+      if (leftAngleOffset === null) leftAngleOffset = angle;
+      state.theta1 = PANTO.leftRestRad + (angle - leftAngleOffset) * PANTO.leftScale;
+      state.vel1 = vel;
+    } else {
+      if (rightAngleOffset === null) rightAngleOffset = angle;
+      state.theta2 = PANTO.rightRestRad + (angle - rightAngleOffset) * PANTO.rightScale;
+      state.vel2 = vel;
+    }
+    addLogLine(`[${side === 'left' ? 'L' : 'R'}] ${line}`, side === 'left' ? 'left' : 'right');
+  } else if (line === 'KNOB_READY') {
+    addLogLine(`[${side === 'left' ? 'L' : 'R'}] ${line}`, 'info');
+  } else {
+    addLogLine(`[${side === 'left' ? 'L' : 'R'}] ${line}`, 'warn');
+  }
+}
+
+function sendTorque(writer, torque, flagObj, key) {
+  if (!writer || flagObj[key]) return;
+  flagObj[key] = true;
+  const data = new TextEncoder().encode(`T:${torque.toFixed(4)}\n`);
+  writer.write(data).then(() => { flagObj[key] = false; }).catch(() => { flagObj[key] = false; });
+}
+const writeFlags = { left: false, right: false };
+
+let lastSendMs = 0;
+function sendTorques() {
+  const now = Date.now();
+  if (now - lastSendMs < 10) return;
+  lastSendMs = now;
+  if (state.leftConnected)  sendTorque(leftWriter,  state.tau1, writeFlags, 'left');
+  if (state.rightConnected) sendTorque(rightWriter, state.tau2, writeFlags, 'right');
+}
+
+// ===================== TISSUE FORCE MODEL =====================
+const simLayers = [
+  { start: 0, thick: 2, a1: .08, a2: .12, Kp: .20, tau: .04, Fr: .55, Fc: .08, punctured: false, dK: 0, idK: 0 },
+  { start: 2, thick: 8, a1: .012, a2: .002, Kp: .03, tau: .10, Fr: .22, Fc: .06, punctured: false, dK: 0, idK: 0 },
+  { start: 10, thick: 25, a1: .018, a2: .004, Kp: .06, tau: .06, Fr: .35, Fc: .12, punctured: false, dK: 0, idK: 0 },
+];
+const MU_SHAFT = 0.003, B_VISCOUS = 0.0015;
+const K_WALL = 0.02;
+const LATERAL_FRICTION = 0.004;
+
+function resetLayers() {
+  for (const L of simLayers) { L.punctured = false; L.dK = 0; L.idK = 0; }
+  state.stateId = 0; state.layerIdx = -1; state.fTip = 0; state.fFric = 0; state.force = 0;
+  state.fx = 0; state.fy = 0; state.tau1 = 0; state.tau2 = 0;
+}
+
+function contactForce(L, delta, dt) {
+  if (delta <= 0) { L.dK = 0; L.idK = 0; return 0; }
+  const ratio = dt / L.tau;
+  L.dK = (delta - L.idK / L.tau) / (1 + ratio);
+  L.idK += L.dK * dt;
+  return Math.max(0, L.a2 * delta * delta + L.a1 * delta + L.Kp * delta * L.dK);
+}
+
+let prevPunc = [false, false, false];
+
+function computeForces(dt) {
+  const d = state.depthMm;
+  const lat = state.lateralMm;
+  let fx = 0, fy = 0;
+
+  // Workspace boundary walls (soft limits on lateral)
+  const latLimit = 20;
+  if (lat > latLimit)  fx -= K_WALL * (lat - latLimit);
+  if (lat < -latLimit) fx -= K_WALL * (lat + latLimit);
+
+  if (d <= 0) {
+    state.stateId = 0; state.layerIdx = -1; state.fTip = 0; state.fFric = 0;
+    state.force = 0; state.fx = fx; state.fy = fy;
+    computeTorquesFromForce(fx, fy);
+    return;
+  }
+
+  // Find tissue layer
+  let li = -1;
+  for (let i = simLayers.length - 1; i >= 0; i--) { if (d >= simLayers[i].start) { li = i; break; } }
+  if (li < 0) li = 0;
+  state.layerIdx = li;
+  const L = simLayers[li];
+  const localD = d - L.start;
+
+  if (L.punctured) {
+    state.stateId = 2;
+    state.fTip = L.Fc;
+  } else {
+    state.stateId = 1;
+    state.fTip = contactForce(L, localD, dt);
+    if (state.fTip >= L.Fr) {
+      L.punctured = true;
+      state.fTip = L.Fc;
+      state.stateId = 2;
+      L.dK = 0; L.idK = 0;
+    }
+  }
+
+  // Shaft friction (axial)
+  state.fFric = MU_SHAFT * d * 0.3;
+
+  // Fy pushes back (opposes insertion, so negative workspace Y direction)
+  fy = -(state.fTip + state.fFric);
+
+  // Lateral friction proportional to depth
+  const latVel = state.vel1 + state.vel2;
+  fx += -LATERAL_FRICTION * d * Math.sign(latVel || 0.001);
+
+  state.force = state.fTip + state.fFric;
+  state.fx = fx;
+  state.fy = fy;
+
+  // Puncture particles
+  for (let i = 0; i < simLayers.length; i++) {
+    if (simLayers[i].punctured && !prevPunc[i])
+      triggerPunctureEffect(-simLayers[i].start - simLayers[i].thick * 0.1);
+    prevPunc[i] = simLayers[i].punctured;
+  }
+
+  computeTorquesFromForce(fx, fy);
+}
+
+function computeTorquesFromForce(fx, fy) {
+  const fk = forwardKinematics(state.theta1, state.theta2);
+  if (!fk) { state.tau1 = 0; state.tau2 = 0; return; }
+  const J = computeJacobian(state.theta1, state.theta2, fk);
+  if (!J) { state.tau1 = 0; state.tau2 = 0; return; }
+  const t = computeTorques(J, fx, fy);
+  const s = PANTO.torqueScale;
+  state.tau1 = Math.max(-1, Math.min(1, t.tau1 * s));
+  state.tau2 = Math.max(-1, Math.min(1, t.tau2 * s));
+}
+
+// ===================== KEYBOARD SIMULATION =====================
+const keys = {};
+window.addEventListener('keydown', e => {
+  keys[e.key] = true;
+  if (e.key === 'r' || e.key === 'R') {
+    state.theta1 = PANTO.leftRestRad;
+    state.theta2 = PANTO.rightRestRad;
+    resetLayers();
+  }
+});
+window.addEventListener('keyup', e => { keys[e.key] = false; });
+
+function simulateInput(dt) {
+  if (state.leftConnected && state.rightConnected) return;
+  const angSpeed = 1.2;
+  if (keys['ArrowDown'])  state.theta1 += angSpeed * dt;
+  if (keys['ArrowUp'])    state.theta1 -= angSpeed * dt;
+  if (keys['ArrowDown'])  state.theta2 -= angSpeed * dt;
+  if (keys['ArrowUp'])    state.theta2 += angSpeed * dt;
+  if (keys['ArrowLeft']) { state.theta1 -= angSpeed * dt * 0.5; state.theta2 -= angSpeed * dt * 0.5; }
+  if (keys['ArrowRight']){ state.theta1 += angSpeed * dt * 0.5; state.theta2 += angSpeed * dt * 0.5; }
+
+  state.theta1 = Math.max(0.05, Math.min(Math.PI - 0.05, state.theta1));
+  state.theta2 = Math.max(0.05, Math.min(Math.PI - 0.05, state.theta2));
+}
+
+// ===================== PANTOGRAPH 2D CANVAS =====================
+const pantoCanvas = document.getElementById('pantoCanvas');
+const pantoCtx = pantoCanvas.getContext('2d');
+
+function drawPantograph() {
+  const W = pantoCanvas.width, H = pantoCanvas.height;
+  pantoCtx.clearRect(0, 0, W, H);
+
+  const scale = 1.1;
+  const oX = W / 2, oY = 20;
+  function ws(x, y) { return [oX + x * scale, oY + y * scale]; }
+
+  // Motors
+  const m1 = ws(-PANTO.d, 0), m2 = ws(PANTO.d, 0);
+  const eA = ws(state.elbowAx, state.elbowAy);
+  const eB = ws(state.elbowBx, state.elbowBy);
+  const ee = ws(state.wsX, state.wsY);
+
+  // Tissue boundary
+  const tb = oY + TISSUE_SURFACE_WS_Y * scale;
+  if (tb < H) {
+    pantoCtx.fillStyle = 'rgba(242,201,168,0.08)';
+    pantoCtx.fillRect(0, tb, W, H - tb);
+    pantoCtx.strokeStyle = 'rgba(242,201,168,0.3)';
+    pantoCtx.setLineDash([3, 3]);
+    pantoCtx.beginPath(); pantoCtx.moveTo(0, tb); pantoCtx.lineTo(W, tb); pantoCtx.stroke();
+    pantoCtx.setLineDash([]);
+  }
+
+  // Links
+  pantoCtx.lineWidth = 3; pantoCtx.lineCap = 'round';
+  pantoCtx.strokeStyle = '#5577cc';
+  pantoCtx.beginPath(); pantoCtx.moveTo(...m1); pantoCtx.lineTo(...eA); pantoCtx.stroke();
+  pantoCtx.strokeStyle = '#cc5555';
+  pantoCtx.beginPath(); pantoCtx.moveTo(...m2); pantoCtx.lineTo(...eB); pantoCtx.stroke();
+  pantoCtx.strokeStyle = '#5577cc88';
+  pantoCtx.beginPath(); pantoCtx.moveTo(...eA); pantoCtx.lineTo(...ee); pantoCtx.stroke();
+  pantoCtx.strokeStyle = '#cc555588';
+  pantoCtx.beginPath(); pantoCtx.moveTo(...eB); pantoCtx.lineTo(...ee); pantoCtx.stroke();
+
+  // Joints
+  for (const [p, r, c] of [[m1, 4, '#3366dd'], [m2, 4, '#dd4444'], [eA, 3, '#6688dd'], [eB, 3, '#dd6666']]) {
+    pantoCtx.fillStyle = c;
+    pantoCtx.beginPath(); pantoCtx.arc(p[0], p[1], r, 0, Math.PI * 2); pantoCtx.fill();
+  }
+
+  // End-effector
+  const glowR = 6 + state.force * 15;
+  const grad = pantoCtx.createRadialGradient(ee[0], ee[1], 0, ee[0], ee[1], glowR);
+  grad.addColorStop(0, state.stateId === 2 ? 'rgba(255,60,60,.6)' : state.stateId === 1 ? 'rgba(255,180,60,.5)' : 'rgba(80,180,255,.4)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  pantoCtx.fillStyle = grad;
+  pantoCtx.beginPath(); pantoCtx.arc(ee[0], ee[1], glowR, 0, Math.PI * 2); pantoCtx.fill();
+  pantoCtx.fillStyle = '#fff';
+  pantoCtx.beginPath(); pantoCtx.arc(ee[0], ee[1], 3.5, 0, Math.PI * 2); pantoCtx.fill();
+
+  // Force arrow
+  const arrowScale = 80;
+  if (Math.abs(state.fx) > 0.001 || Math.abs(state.fy) > 0.001) {
+    pantoCtx.strokeStyle = '#ff6040';
+    pantoCtx.lineWidth = 2;
+    pantoCtx.beginPath();
+    pantoCtx.moveTo(ee[0], ee[1]);
+    pantoCtx.lineTo(ee[0] + state.fx * arrowScale, ee[1] + state.fy * arrowScale);
+    pantoCtx.stroke();
+  }
+
+  // Labels
+  pantoCtx.fillStyle = '#555';
+  pantoCtx.font = '9px sans-serif';
+  pantoCtx.fillText('L', m1[0] - 10, m1[1] + 4);
+  pantoCtx.fillText('R', m2[0] + 5, m2[1] + 4);
+}
+
+// ===================== HUD UPDATE =====================
+const forceCanvas = document.getElementById('forceCanvas');
+const forceCtx = forceCanvas.getContext('2d');
+const HIST = 220;
+const forceHist = new Array(HIST).fill(0);
+const tipHist   = new Array(HIST).fill(0);
+const fricHist  = new Array(HIST).fill(0);
+
+const stateNames = ['AIR', 'DEFORM', 'CUTTING'];
+const stateCls   = ['state-air', 'state-deform', 'state-cutting'];
+const stateCols  = ['#60c0ff', '#ffb840', '#ff5050'];
+const layerNames = ['SKIN', 'FAT', 'MUSCLE'];
+const layerCls   = ['layer-skin', 'layer-fat', 'layer-muscle'];
+
+function drawTrace(ctx, data, w, h, col, maxV) {
+  ctx.strokeStyle = col; ctx.lineWidth = 1.4; ctx.beginPath();
+  for (let i = 0; i < data.length; i++) {
+    const x = (i / data.length) * w, y = h - (data[i] / maxV) * h;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+}
+
+function updateHUD() {
+  document.getElementById('posXVal').textContent  = state.lateralMm.toFixed(1);
+  document.getElementById('depthVal').textContent = state.depthMm.toFixed(1);
+  document.getElementById('fxVal').textContent    = state.fx.toFixed(3);
+  document.getElementById('fyVal').textContent    = state.fy.toFixed(3);
+  document.getElementById('tau1Val').textContent  = state.tau1.toFixed(3);
+  document.getElementById('tau2Val').textContent  = state.tau2.toFixed(3);
+  document.getElementById('theta1Val').textContent = (state.theta1 * 180 / Math.PI).toFixed(1);
+  document.getElementById('theta2Val').textContent = (state.theta2 * 180 / Math.PI).toFixed(1);
+
+  const badge = document.getElementById('stateBadge');
+  badge.textContent = stateNames[state.stateId] || 'AIR';
+  badge.className = 'state-badge ' + (stateCls[state.stateId] || 'state-air');
+
+  const lb = document.getElementById('layerBadge');
+  if (state.layerIdx >= 0 && state.layerIdx < 3) {
+    lb.style.display = 'inline-block';
+    lb.textContent = layerNames[state.layerIdx];
+    lb.className = 'layer-badge ' + layerCls[state.layerIdx];
+  } else { lb.style.display = 'none'; }
+
+  const pct = Math.max(0, Math.min(100, (state.depthMm / MAX_DISPLAY_DEPTH) * 100));
+  const bar = document.getElementById('depthBar');
+  bar.style.width = pct + '%';
+  bar.style.background = stateCols[state.stateId] || stateCols[0];
+
+  forceHist.push(state.force); if (forceHist.length > HIST) forceHist.shift();
+  tipHist.push(state.fTip);   if (tipHist.length > HIST)   tipHist.shift();
+  fricHist.push(state.fFric);  if (fricHist.length > HIST)  fricHist.shift();
+
+  const w = forceCanvas.width, h = forceCanvas.height;
+  forceCtx.clearRect(0, 0, w, h);
+  const maxF = 0.7;
+  forceCtx.setLineDash([2, 3]); forceCtx.lineWidth = .5;
+  for (const [fr, col] of [[.55, '#f2c9a850'], [.22, '#f5e6a050'], [.35, '#e0505050']]) {
+    forceCtx.strokeStyle = col; forceCtx.beginPath();
+    const ly = h - (fr / maxF) * h;
+    forceCtx.moveTo(0, ly); forceCtx.lineTo(w, ly); forceCtx.stroke();
+  }
+  forceCtx.setLineDash([]);
+  drawTrace(forceCtx, fricHist, w, h, '#40c0c080', maxF);
+  drawTrace(forceCtx, tipHist, w, h, '#ffaa40c0', maxF);
+  drawTrace(forceCtx, forceHist, w, h, '#ffffffd0', maxF);
+
+  forceCtx.fillStyle = '#aaa'; forceCtx.font = '8px sans-serif'; forceCtx.textAlign = 'right';
+  forceCtx.fillText('total', w - 14, 11); forceCtx.fillText('tip', w - 14, 21); forceCtx.fillText('fric', w - 14, 31);
+  for (const [dx, dy, c] of [[w-8,8,'#fff'],[w-8,18,'#ffaa40'],[w-8,28,'#40c0c0']]) {
+    forceCtx.fillStyle = c; forceCtx.beginPath(); forceCtx.arc(dx, dy, 2.5, 0, Math.PI*2); forceCtx.fill();
+  }
+
+  drawPantograph();
+}
+
+// ===================== SERIAL LOG PANEL =====================
+const logEl = document.getElementById('logContent');
+const logPanel = document.getElementById('logPanel');
+const logCountEl = document.getElementById('logCount');
+const logDot = document.getElementById('logDot');
+let logLineCount = 0, logAutoScroll = true;
+const MAX_LOG = 500;
+
+function toggleLog() { logPanel.classList.toggle('collapsed'); }
+window.toggleLog = toggleLog;
+function toggleAutoScroll(e) {
+  e.stopPropagation(); logAutoScroll = !logAutoScroll;
+  document.getElementById('logAutoScroll').classList.toggle('active', logAutoScroll);
+}
+window.toggleAutoScroll = toggleAutoScroll;
+function clearLog(e) { e.stopPropagation(); logEl.innerHTML = ''; logLineCount = 0; logCountEl.textContent = '0 lines'; }
+window.clearLog = clearLog;
+
+function addLogLine(text, type = 'data') {
+  const now = new Date();
+  const ts = now.toTimeString().slice(0, 8) + '.' + String(now.getMilliseconds()).padStart(3, '0');
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  if (type === 'left')       line.innerHTML = `<span class="log-ts">${ts}</span><span class="log-left">${text}</span>`;
+  else if (type === 'right') line.innerHTML = `<span class="log-ts">${ts}</span><span class="log-right">${text}</span>`;
+  else if (type === 'info')  line.innerHTML = `<span class="log-ts">${ts}</span><span class="log-info">${text}</span>`;
+  else if (type === 'warn')  line.innerHTML = `<span class="log-ts">${ts}</span><span class="log-warn">${text}</span>`;
+  else if (type === 'data') {
+    let html = `<span class="log-ts">${ts}</span>`;
+    const parts = text.split(/\s+/);
+    for (const p of parts) {
+      const [k, v] = p.split(':');
+      if (k === 'X')     html += `<span class="log-key">X:</span><span class="log-depth">${v}</span> `;
+      else if (k === 'D') html += `<span class="log-key">D:</span><span class="log-force">${v}</span> `;
+      else if (k === 'Fx') html += `<span class="log-key">Fx:</span><span class="log-state">${v}</span> `;
+      else if (k === 'Fy') html += `<span class="log-key">Fy:</span><span class="log-layer">${v}</span> `;
+      else html += `<span class="log-key">${p}</span> `;
+    }
+    line.innerHTML = html;
+  } else { line.innerHTML = `<span class="log-ts">${ts}</span>${text}`; }
+
+  logEl.appendChild(line); logLineCount++;
+  while (logEl.children.length > MAX_LOG) { logEl.removeChild(logEl.firstChild); logLineCount = logEl.children.length; }
+  logCountEl.textContent = `${logLineCount} lines`;
+  if (logAutoScroll) logEl.scrollTop = logEl.scrollHeight;
+}
+
+// ---- Dummy log ----
+let dummyInterval = null, dummyStarted = false;
+function startDummyLog() {
+  if (dummyStarted) return; dummyStarted = true;
+  addLogLine('=== 2-DOF Pantograph Simulation ===', 'info');
+  addLogLine('FK: 5-bar linkage | Jacobian transpose torque mapping', 'info');
+  addLogLine('Force model: Okamura (2004) + Mahvash-Dupont contact', 'info');
+  addLogLine('Layers: Skin / Fat / Muscle | Lateral friction', 'info');
+  addLogLine('Use arrow keys to move. Connect two ESP32s for hardware.', 'info');
+  dummyInterval = setInterval(() => {
+    if (state.leftConnected && state.rightConnected) { clearInterval(dummyInterval); return; }
+    const line = `X:${state.lateralMm.toFixed(1)} D:${state.depthMm.toFixed(2)} Fx:${state.fx.toFixed(3)} Fy:${state.fy.toFixed(3)} τ1:${state.tau1.toFixed(3)} τ2:${state.tau2.toFixed(3)}`;
+    addLogLine(line, 'data');
+    logDot.className = state.depthMm > 0 ? 'dot live' : 'dot idle';
+  }, 120);
+}
+setTimeout(startDummyLog, 500);
+
+// ===================== ANIMATION LOOP =====================
+const clock = new THREE.Clock();
+updateFK();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  simulateInput(dt);
+  updateFK();
+  computeForces(dt);
+
+  if (state.leftConnected || state.rightConnected) sendTorques();
+
+  controls.update();
+  updateNeedle(state.depthMm, state.lateralMm);
+  updateDeformation(state.depthMm, state.lateralMm * 0.5);
+  updateParticles(dt);
+
+  depthMarker.position.y = -Math.max(0, state.depthMm);
+
+  const gi = state.stateId === 2 ? .5 : state.stateId === 1 ? state.force * .6 : 0;
+  glowRingMat.opacity = gi;
+  glowRingMat.color.setHex(state.stateId === 2 ? 0xff4040 : 0xffaa30);
+
+  for (const name of layerOrder) layerMeshes[name].material.opacity = 0.88;
+  if (state.depthMm > 0) {
+    let acc = 0;
+    for (const name of layerOrder) {
+      acc += LAYER[name].thickness;
+      if (state.depthMm <= acc) {
+        layerMeshes[name].material.opacity = .72 + .08 * Math.sin(clock.elapsedTime * 3);
+        break;
+      }
+    }
+  }
+
+  updateHUD();
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>
